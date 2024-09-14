@@ -1,6 +1,6 @@
 # rust-minikeyvalue
 
-minikeyvalue is a distributed key-value store with a simple HTTP interface, written in Rust. This project is a port of the original Go implementation by George Hotz, used in production at comma.ai.
+minikeyvalue is a distributed key-value store with a simple HTTP interface, written in Rust. This project is a port of the [original Go implementation by George Hotz](https://github.com/geohot/minikeyvalue/tree/master), used in production at comma.ai.
 
 ## Features
 
