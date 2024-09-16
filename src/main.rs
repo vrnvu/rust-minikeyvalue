@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
@@ -46,11 +46,11 @@ async fn main() -> anyhow::Result<()> {
     let port = cli.port;
     let ldb_path = cli.ldb;
     let md5sum = cli.md5sum;
-    let db = Arc::new(Mutex::new(HashMap::<String, Bytes>::new()));
-    let db = warp::any().map(move || db.clone());
+    let lock_keys = Arc::new(Mutex::new(HashSet::<String>::new()));
+    let lock_keys = warp::any().map(move || lock_keys.clone());
 
     let put_record = warp::put()
-        .and(db.clone())
+        .and(lock_keys.clone())
         .and(warp::header::optional::<u64>("content-length"))
         .and(warp::path::param())
         .and(warp::body::bytes())
@@ -58,7 +58,6 @@ async fn main() -> anyhow::Result<()> {
         .map(handle_put_record);
 
     let get_record = warp::get()
-        .and(db.clone())
         .and(warp::path::param())
         .and(warp::path::end())
         .map(handle_get_record);
@@ -71,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn handle_put_record(
-    db: Arc<Mutex<HashMap<String, Bytes>>>,
+    lock_keys: Arc<Mutex<HashSet<String>>>,
     content_length: Option<u64>,
     key: String,
     value: Bytes,
@@ -83,41 +82,34 @@ fn handle_put_record(
             .body("Content-Length is required".to_string());
     }
 
-    let mut db = match db.lock() {
-        Ok(db) => db,
+    let mut lock_keys = match lock_keys.lock() {
+        Ok(lock_keys) => lock_keys,
         Err(e) => {
             return warp::http::Response::builder()
                 .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
                 .body(e.to_string())
         }
     };
-    db.insert(key.clone(), value);
+
+    if lock_keys.contains(&key) {
+        return warp::http::Response::builder()
+            .status(warp::http::StatusCode::CONFLICT)
+            .body(String::new());
+    }
+
+    lock_keys.insert(key.clone());
+
+    // TODO: write to leveldb and write to volumes
+
+    lock_keys.remove(&key);
 
     warp::http::Response::builder()
         .status(warp::http::StatusCode::CREATED)
         .body(key)
 }
 
-fn handle_get_record(db: Arc<Mutex<HashMap<String, Bytes>>>, key: String) -> impl warp::Reply {
+fn handle_get_record(key: String) -> impl warp::Reply {
     debug!("get_record: key: {}", key);
-    let db = match db.lock() {
-        Ok(db) => db,
-        Err(e) => {
-            return warp::http::Response::builder()
-                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string())
-        }
-    };
-
-    let _todo_redirect_to_nginx_volume_server = match db.get(&key) {
-        Some(value) => value,
-        None => {
-            return warp::http::Response::builder()
-                .status(warp::http::StatusCode::NOT_FOUND)
-                .body(format!("Key not found: {}", key))
-        }
-    };
-
     warp::http::Response::builder()
         .status(warp::http::StatusCode::FOUND)
         .body("TODO redirect to nginx volume server".to_string())
