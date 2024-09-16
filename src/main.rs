@@ -113,23 +113,25 @@ async fn handle_put_record(
             .body("Content-Length is required".to_string()));
     }
 
-    let mut lock_keys = match lock_keys.lock() {
-        Ok(lock_keys) => lock_keys,
-        Err(e) => {
-            error!("put_record: failed to lock lock_keys: {}", e);
+    {
+        let mut lock_keys = match lock_keys.lock() {
+            Ok(lock_keys) => lock_keys,
+            Err(e) => {
+                error!("put_record: failed to lock lock_keys: {}", e);
+                return Ok(warp::http::Response::builder()
+                    .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(e.to_string()));
+            }
+        };
+
+        if lock_keys.contains(&key) {
             return Ok(warp::http::Response::builder()
-                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string()));
+                .status(warp::http::StatusCode::CONFLICT)
+                .body(String::new()));
         }
-    };
 
-    if lock_keys.contains(&key) {
-        return Ok(warp::http::Response::builder()
-            .status(warp::http::StatusCode::CONFLICT)
-            .body(String::new()));
+        lock_keys.insert(key.clone());
     }
-
-    lock_keys.insert(key.clone());
 
     // TODO: write to leveldb and write to volumes
     let leveldb = match leveldb.lock() {
@@ -164,7 +166,19 @@ async fn handle_put_record(
     // TODO partNumber
     // TODO write_to_replicas(key, value, content_length.unwrap());
 
-    lock_keys.remove(&key);
+    {
+        let mut lock_keys = match lock_keys.lock() {
+            Ok(lock_keys) => lock_keys,
+            Err(e) => {
+                error!("put_record: failed to lock lock_keys: {}", e);
+                return Ok(warp::http::Response::builder()
+                    .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(e.to_string()));
+            }
+        };
+
+        lock_keys.remove(&key);
+    }
 
     Ok(warp::http::Response::builder()
         .status(warp::http::StatusCode::CREATED)
