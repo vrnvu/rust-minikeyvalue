@@ -170,6 +170,7 @@ async fn handle_put_record(
         let mut lock_keys = match lock_keys.lock() {
             Ok(lock_keys) => lock_keys,
             Err(e) => {
+                // TODO if thread is Poisoned probably we should panic to re-start and re-build
                 error!("put_record: failed to lock lock_keys: {}", e);
                 return Ok(warp::http::Response::builder()
                     .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
