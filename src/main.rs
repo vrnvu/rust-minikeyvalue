@@ -1,3 +1,9 @@
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
+use bytes::Bytes;
 use clap::Parser;
 use log::debug;
 use warp::Filter;
@@ -27,13 +33,6 @@ struct Cli {
     md5sum: bool,
 }
 
-#[derive(Debug)]
-struct App {
-    port: u16,
-    ldb_path: String,
-    md5sum: bool,
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -44,45 +43,74 @@ async fn main() -> anyhow::Result<()> {
     }
     env_logger::init();
 
-    let app = App {
-        port: cli.port,
-        ldb_path: cli.ldb,
-        md5sum: cli.md5sum,
-    };
+    let port = cli.port;
+    let ldb_path = cli.ldb;
+    let md5sum = cli.md5sum;
+    let db = Arc::new(Mutex::new(HashMap::<String, Bytes>::new()));
+    let db = warp::any().map(move || db.clone());
 
-    dbg!(&app);
-
-    let api = warp_handlers();
-    warp::serve(api).run(([127, 0, 0, 1], app.port)).await;
-
-    Ok(())
-}
-
-fn warp_handlers() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    let put_record = warp::path::param()
-        .and(warp::put())
+    let put_record = warp::put()
+        .and(db.clone())
+        .and(warp::path::param())
         .and(warp::body::bytes())
         .and(warp::path::end())
         .map(handle_put_record);
 
-    let get_record = warp::path::param()
-        .and(warp::get())
+    let get_record = warp::get()
+        .and(db.clone())
+        .and(warp::path::param())
         .and(warp::path::end())
         .map(handle_get_record);
 
-    put_record.or(get_record)
+    let api = put_record.or(get_record);
+
+    warp::serve(api).run(([127, 0, 0, 1], port)).await;
+
+    Ok(())
 }
 
-fn handle_put_record(key: String, value: bytes::Bytes) -> impl warp::Reply {
+fn handle_put_record(
+    db: Arc<Mutex<HashMap<String, Bytes>>>,
+    key: String,
+    value: Bytes,
+) -> impl warp::Reply {
     debug!("put_record: key: {}, value: {:?}", key, value);
+    let mut db = match db.lock() {
+        Ok(db) => db,
+        Err(e) => {
+            return warp::http::Response::builder()
+                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(e.to_string())
+        }
+    };
+    db.insert(key.clone(), value);
+
     warp::http::Response::builder()
-        .status(warp::http::StatusCode::NOT_IMPLEMENTED)
-        .body(value)
+        .status(warp::http::StatusCode::CREATED)
+        .body(key)
 }
 
-fn handle_get_record(key: String) -> impl warp::Reply {
+fn handle_get_record(db: Arc<Mutex<HashMap<String, Bytes>>>, key: String) -> impl warp::Reply {
     debug!("get_record: key: {}", key);
+    let db = match db.lock() {
+        Ok(db) => db,
+        Err(e) => {
+            return warp::http::Response::builder()
+                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(e.to_string())
+        }
+    };
+
+    let _todo_redirect_to_nginx_volume_server = match db.get(&key) {
+        Some(value) => value,
+        None => {
+            return warp::http::Response::builder()
+                .status(warp::http::StatusCode::NOT_FOUND)
+                .body(format!("Key not found: {}", key))
+        }
+    };
+
     warp::http::Response::builder()
-        .status(warp::http::StatusCode::NOT_IMPLEMENTED)
-        .body("todo")
+        .status(warp::http::StatusCode::FOUND)
+        .body("TODO redirect to nginx volume server".to_string())
 }
