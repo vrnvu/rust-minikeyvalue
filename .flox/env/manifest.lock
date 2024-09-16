@@ -9,6 +9,12 @@
       "leveldb": {
         "pkg-path": "leveldb"
       },
+      "nginx": {
+        "pkg-path": "nginx"
+      },
+      "pcre": {
+        "pkg-path": "pcre"
+      },
       "python3": {
         "pkg-path": "python3"
       },
@@ -273,6 +279,262 @@
       "outputs": {
         "dev": "/nix/store/7cx38g9ybcn0ml9lgram09dz6g9pwrx1-leveldb-1.23-dev",
         "out": "/nix/store/ixgbxmmzmzcyg81bn1h23gnl5p2kr7kf-leveldb-1.23"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "nginx",
+      "broken": false,
+      "derivation": "/nix/store/s07l7l08r7s08rcpgbslgpqrw1wf3c2v-nginx-1.26.2.drv",
+      "description": "Reverse proxy and lightweight webserver",
+      "install_id": "nginx",
+      "license": "[ BSD-2-Clause, BSD-2-Clause, BSD-2-Clause, BSD-2-Clause ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "nginx-1.26.2",
+      "pname": "nginx",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.26.2",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/pg1ypw6qyf7m1m5dw15ny759lbqfhrpy-nginx-1.26.2-doc",
+        "out": "/nix/store/vqw67wb6s4xa4fqkw1dxgxz5h8q85qgj-nginx-1.26.2"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "nginx",
+      "broken": false,
+      "derivation": "/nix/store/lqcd541wjz29hg8kdhhl78cy56bxnmd0-nginx-1.26.2.drv",
+      "description": "Reverse proxy and lightweight webserver",
+      "install_id": "nginx",
+      "license": "[ BSD-2-Clause, BSD-2-Clause, BSD-2-Clause, BSD-2-Clause ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "nginx-1.26.2",
+      "pname": "nginx",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.26.2",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/71crd3aifa531vbwp2wv4s9797f4ynv4-nginx-1.26.2-doc",
+        "out": "/nix/store/ndvasaq5v2n34nbkj2yxqijslkfp8kxa-nginx-1.26.2"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "nginx",
+      "broken": false,
+      "derivation": "/nix/store/y4vl8m62772y1dzvim9yjx0db2wjk0f9-nginx-1.26.2.drv",
+      "description": "Reverse proxy and lightweight webserver",
+      "install_id": "nginx",
+      "license": "[ BSD-2-Clause, BSD-2-Clause, BSD-2-Clause, BSD-2-Clause ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "nginx-1.26.2",
+      "pname": "nginx",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.26.2",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/1i9qmji755p05nicmbysyw5z1s88fni7-nginx-1.26.2-doc",
+        "out": "/nix/store/f1j3smgyhnhb77fwd3wyq94fvhi4pbyz-nginx-1.26.2"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "nginx",
+      "broken": false,
+      "derivation": "/nix/store/4jflwjw7kxlxdkwzxpcp1yvxr8ngjyjv-nginx-1.26.2.drv",
+      "description": "Reverse proxy and lightweight webserver",
+      "install_id": "nginx",
+      "license": "[ BSD-2-Clause, BSD-2-Clause, BSD-2-Clause, BSD-2-Clause ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "nginx-1.26.2",
+      "pname": "nginx",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.26.2",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/mbaqy4xggsslrz17fpg2nkxl3bil7qsh-nginx-1.26.2-doc",
+        "out": "/nix/store/s13inrbla7zfllqywq9dvhh3bi3ycvix-nginx-1.26.2"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "pcre",
+      "broken": false,
+      "derivation": "/nix/store/pf65bvmn8r9i1v541hxgh89wvqfr76i1-pcre-8.45.drv",
+      "description": "Library for Perl Compatible Regular Expressions",
+      "install_id": "pcre",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "pcre-8.45",
+      "pname": "pcre",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "8.45",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/x6ldg5fzy4cnwh8hq4mx7bl1ylvdiymc-pcre-8.45-bin",
+        "dev": "/nix/store/dqgl67js3ddz1f72wry752sg177lwqw5-pcre-8.45-dev",
+        "doc": "/nix/store/mssa5s363cnhc68z0p5wqbi94bmlb7nv-pcre-8.45-doc",
+        "man": "/nix/store/zazn69vh86aqfyn5y91ywh41sd02r4s6-pcre-8.45-man",
+        "out": "/nix/store/11cw63cn1p14mlyjfhalq7scc7cwrkbi-pcre-8.45"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "pcre",
+      "broken": false,
+      "derivation": "/nix/store/54i96a15ajd09by8q1mdkwdlg3m2v59y-pcre-8.45.drv",
+      "description": "Library for Perl Compatible Regular Expressions",
+      "install_id": "pcre",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "pcre-8.45",
+      "pname": "pcre",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "8.45",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/pz7cx40zpkzdzffjd3c7yi3d9mq8q1pb-pcre-8.45-bin",
+        "dev": "/nix/store/y0qj1fqy05ama02pcavap1205d1rhzz2-pcre-8.45-dev",
+        "doc": "/nix/store/iaad7yy3cdz9j8bbr02szmgzc5246vg9-pcre-8.45-doc",
+        "man": "/nix/store/i4dix9c4infpn691figa0rx7ax110hn8-pcre-8.45-man",
+        "out": "/nix/store/w1l1g16bjzxy2zh6w056yasdlv4sxfyd-pcre-8.45"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "pcre",
+      "broken": false,
+      "derivation": "/nix/store/b1580y60b9kgplz95r4b51dwjqhx0746-pcre-8.45.drv",
+      "description": "Library for Perl Compatible Regular Expressions",
+      "install_id": "pcre",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "pcre-8.45",
+      "pname": "pcre",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "8.45",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/vbg1mg7mkq11i1ggxcvgq3j7cm34fr35-pcre-8.45-bin",
+        "dev": "/nix/store/xfikaazc7w1cgr7ajdvbaii3m5p00w8i-pcre-8.45-dev",
+        "doc": "/nix/store/w9252gi471ba5rp4474gjhvafrrmv68k-pcre-8.45-doc",
+        "man": "/nix/store/x89vx3f8h13wz8lzpasnd5agd7gfycma-pcre-8.45-man",
+        "out": "/nix/store/vxjai54nn62899bkzq2v1nmgvy7zx4ky-pcre-8.45"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "pcre",
+      "broken": false,
+      "derivation": "/nix/store/wc6zm407k8ldy21lvih0hmagl7khh4nf-pcre-8.45.drv",
+      "description": "Library for Perl Compatible Regular Expressions",
+      "install_id": "pcre",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "pcre-8.45",
+      "pname": "pcre",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "8.45",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/lw9hjijqvj9wrj6xw8pym6x5wsd8zh70-pcre-8.45-bin",
+        "dev": "/nix/store/g79h5cdsaya39cj2lfq658q6965ham9c-pcre-8.45-dev",
+        "doc": "/nix/store/0facl7b8k89r30rqi7x8nqps0a6pdpdp-pcre-8.45-doc",
+        "man": "/nix/store/xcgdqncx2gn6fjf2v18a3mp51gk8yj8f-pcre-8.45-man",
+        "out": "/nix/store/012jslm61i2424vxnzzbxqf4j9r60qzh-pcre-8.45"
       },
       "system": "x86_64-linux",
       "group": "toplevel",

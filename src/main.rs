@@ -1,12 +1,9 @@
-use std::{
-    collections::HashSet,
-    path::Path,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use bytes::Bytes;
 use clap::Parser;
 use log::{debug, error, info};
+use tokio::sync::Mutex;
 use warp::Filter;
 
 mod record;
@@ -29,11 +26,23 @@ struct Cli {
 
     /// Sets the path to the leveldb
     #[clap(short, long)]
-    ldb: String,
+    leveldb_path: String,
 
     /// Calculate and store the MD5 checksum of values
-    #[clap(short, long, default_value = "true")]
-    md5sum: bool,
+    #[clap(long, default_value = "true")]
+    hash_md5_checksum: bool,
+
+    /// Sets the volumes
+    #[clap(long, value_delimiter = ',')]
+    volumes: Vec<String>,
+
+    /// Sets the number of replicas
+    #[clap(long, default_value = "3")]
+    replicas: usize,
+
+    /// Sets the number of subvolumes
+    #[clap(long, default_value = "10")]
+    subvolumes: u32,
 }
 
 #[tokio::main]
@@ -47,11 +56,14 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let port = cli.port;
-    let leveldb_path = Path::new(&cli.ldb);
-    let verify_checksums = cli.md5sum;
+    let leveldb_path = Path::new(&cli.leveldb_path);
+    let verify_checksums = cli.hash_md5_checksum;
+    let volumes = cli.volumes;
+    let replicas = cli.replicas;
+    let subvolumes = cli.subvolumes;
 
     let leveldb = {
-        let leveldb = record::LevelDb::new(leveldb_path, verify_checksums)?;
+        let leveldb = record::LevelDb::new(leveldb_path)?;
         let leveldb = Arc::new(Mutex::new(leveldb));
         warp::any().map(move || leveldb.clone())
     };
@@ -62,12 +74,19 @@ async fn main() -> anyhow::Result<()> {
         warp::any().map(move || lock_keys.clone())
     };
 
+    let put_record_context = PutRecordContext {
+        volumes,
+        replicas,
+        subvolumes,
+        verify_checksums,
+    };
     let put_record = warp::put()
         .and(lock_keys.clone())
         .and(leveldb.clone())
-        .and(warp::header::optional::<u64>("content-length"))
         .and(warp::path::param::<String>())
+        .and(warp::header::optional::<u64>("content-length"))
         .and(warp::body::bytes())
+        .and(warp::any().map(move || put_record_context.clone()))
         .and(warp::path::end())
         .and_then(handle_put_record);
 
@@ -88,7 +107,7 @@ pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, 
     let code = {
         if err.is_not_found() {
             warp::http::StatusCode::NOT_FOUND
-        } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
+        } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
             warp::http::StatusCode::METHOD_NOT_ALLOWED
         } else {
             warp::http::StatusCode::INTERNAL_SERVER_ERROR
@@ -98,13 +117,29 @@ pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, 
     Ok(warp::http::Response::builder().status(code).body(message))
 }
 
+#[derive(Debug, Clone)]
+struct PutRecordContext {
+    volumes: Vec<String>,
+    replicas: usize,
+    subvolumes: u32,
+    verify_checksums: bool,
+}
+
 async fn handle_put_record(
     lock_keys: Arc<Mutex<HashSet<String>>>,
     leveldb: Arc<Mutex<record::LevelDb>>,
-    content_length: Option<u64>,
     key: String,
+    content_length: Option<u64>,
     value: Bytes,
+    put_record_context: PutRecordContext,
 ) -> Result<impl warp::Reply, warp::Rejection> {
+    let PutRecordContext {
+        volumes,
+        replicas,
+        subvolumes,
+        verify_checksums,
+    } = put_record_context;
+
     info!("put_record: key: {}, value: {:?}", key, value);
     if content_length.is_none() {
         debug!("put_record: content_length is none for key: {}", key);
@@ -113,37 +148,18 @@ async fn handle_put_record(
             .body("Content-Length is required".to_string()));
     }
 
-    {
-        let mut lock_keys = match lock_keys.lock() {
-            Ok(lock_keys) => lock_keys,
-            Err(e) => {
-                error!("put_record: failed to lock lock_keys: {}", e);
-                return Ok(warp::http::Response::builder()
-                    .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(e.to_string()));
-            }
-        };
+    // TODO: handle mutex better for lock_keys and leveldb
+    let mut lock_keys = lock_keys.lock().await;
 
-        if lock_keys.contains(&key) {
-            return Ok(warp::http::Response::builder()
-                .status(warp::http::StatusCode::CONFLICT)
-                .body(String::new()));
-        }
-
-        lock_keys.insert(key.clone());
+    if lock_keys.contains(&key) {
+        return Ok(warp::http::Response::builder()
+            .status(warp::http::StatusCode::CONFLICT)
+            .body(String::new()));
     }
 
-    // TODO: write to leveldb and write to volumes
-    let leveldb = match leveldb.lock() {
-        Ok(leveldb) => leveldb,
-        Err(e) => {
-            error!("put_record: failed to lock leveldb: {}", e);
-            return Ok(warp::http::Response::builder()
-                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string()));
-        }
-    };
+    lock_keys.insert(key.clone());
 
+    let leveldb = leveldb.lock().await;
     let record: record::Record = match leveldb.get_record_or_default(&key) {
         Ok(record) => record,
         Err(e) => {
@@ -164,26 +180,94 @@ async fn handle_put_record(
     }
 
     // TODO partNumber
-    // TODO write_to_replicas(key, value, content_length.unwrap());
+    let replicas_volumes = record::get_volume(&key, volumes, replicas, subvolumes);
+    let record = record::Record::new(
+        record::Deleted::Init,
+        String::new(),
+        replicas_volumes.clone(),
+    );
+    match leveldb.put_record(&key, record) {
+        Ok(_) => (),
+        Err(e) => {
+            error!("put_record: failed to put record {} in leveldb: {}", key, e);
+            return Ok(warp::http::Response::builder()
+                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(e.to_string()));
+        }
+    }
 
-    {
-        let mut lock_keys = match lock_keys.lock() {
-            Ok(lock_keys) => lock_keys,
+    for volume in replicas_volumes.clone() {
+        let remote_replica_volume_path = record::get_remote_path(&key);
+        let remote_url = format!("http://{}{}", volume, remote_replica_volume_path);
+        // TODO is this value Bytes an efficient buffer?
+        info!("put_record key: {} remote_url: {}", key, remote_url);
+        match remote_put(remote_url, &value).await {
+            Ok(_) => (),
             Err(e) => {
-                // TODO if thread is Poisoned probably we should panic to re-start and re-build
-                error!("put_record: failed to lock lock_keys: {}", e);
+                error!(
+                    "put_record: failed to put record {} in remote replica volume {} with path {}: {}",
+                    key, volume, remote_replica_volume_path, e
+                );
                 return Ok(warp::http::Response::builder()
                     .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
                     .body(e.to_string()));
             }
-        };
-
-        lock_keys.remove(&key);
+        }
     }
+
+    let value_md5_hash = if verify_checksums {
+        let hash = md5::compute(value);
+        format!("{:x}", hash)
+    } else {
+        String::new()
+    };
+
+    let record = record::Record::new(record::Deleted::No, value_md5_hash, replicas_volumes);
+    match leveldb.put_record(&key, record) {
+        Ok(_) => (),
+        Err(e) => {
+            error!(
+                "put_record: failed to put record with value_md5_hash {} in leveldb: {}",
+                key, e
+            );
+            return Ok(warp::http::Response::builder()
+                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(e.to_string()));
+        }
+    }
+
+    lock_keys.remove(&key);
 
     Ok(warp::http::Response::builder()
         .status(warp::http::StatusCode::CREATED)
-        .body(key))
+        .body(String::new()))
+}
+
+async fn remote_put(remote_url: String, value: &bytes::Bytes) -> anyhow::Result<()> {
+    let client = reqwest::Client::new();
+    let res = client
+        .put(remote_url.clone())
+        .body(value.clone())
+        .send()
+        .await?;
+    if res.status().is_success() {
+        if res.status().as_u16() != warp::http::StatusCode::CREATED.as_u16()
+            && res.status().as_u16() != warp::http::StatusCode::NO_CONTENT.as_u16()
+        {
+            return Err(anyhow::anyhow!(
+                "remote_put: invalid status code: {} for url: {}",
+                res.status(),
+                remote_url
+            ));
+        }
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "remote_put: failed to put value at {}: {}",
+            remote_url,
+            res.status()
+        ))
+    }
 }
 
 async fn handle_get_record(key: String) -> Result<impl warp::Reply, warp::Rejection> {

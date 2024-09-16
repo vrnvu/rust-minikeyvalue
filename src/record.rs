@@ -1,5 +1,3 @@
-use std::hash::Hash;
-
 use anyhow::Context;
 use leveldb::database::Database;
 use leveldb::kv::KV;
@@ -22,6 +20,14 @@ pub(crate) struct Record {
 }
 
 impl Record {
+    pub(crate) fn new(deleted: Deleted, hash: String, read_volumes: Vec<String>) -> Self {
+        Self {
+            deleted,
+            hash,
+            read_volumes,
+        }
+    }
+
     pub(crate) fn deleted(&self) -> Deleted {
         self.deleted
     }
@@ -56,29 +62,46 @@ impl TryFrom<Option<Vec<u8>>> for Record {
     }
 }
 
+pub(crate) type LevelDbKey = i32;
+
+pub(crate) fn leveldb_key_from_str(key: &str) -> LevelDbKey {
+    // TODO make sure i32 is always positive and use only the lower 31 bits of the hash
+    let leveldb_key: i32 = (gxhash::gxhash32(key.as_bytes(), 0) & 0x7FFFFFFF) as i32;
+    leveldb_key
+}
+
 pub(crate) struct LevelDb {
-    leveldb: Database<i32>,
-    verify_checksums: bool,
+    leveldb: Database<LevelDbKey>,
 }
 
 impl LevelDb {
-    pub(crate) fn new(ldb_path: &std::path::Path, verify_checksums: bool) -> anyhow::Result<Self> {
+    pub(crate) fn new(ldb_path: &std::path::Path) -> anyhow::Result<Self> {
         let mut leveldb_options = leveldb::options::Options::new();
         leveldb_options.create_if_missing = true;
 
-        let leveldb = leveldb::database::Database::open(&ldb_path, leveldb_options)
+        let leveldb = leveldb::database::Database::open(ldb_path, leveldb_options)
             .with_context(|| format!("Failed to open LevelDB at path: {}", ldb_path.display()))?;
 
-        Ok(Self {
-            leveldb,
-            verify_checksums,
-        })
+        Ok(Self { leveldb })
+    }
+
+    pub(crate) fn put_record(&self, key: &str, record: Record) -> anyhow::Result<()> {
+        let leveldb_key = leveldb_key_from_str(key);
+        let write_options = leveldb::options::WriteOptions::new();
+        self.leveldb
+            .put(write_options, leveldb_key, &record.to_bytes()?)
+            .with_context(|| {
+                format!(
+                    "Failed to put record for key {} and leveldb_key {}",
+                    key, leveldb_key
+                )
+            })?;
+        Ok(())
     }
 
     pub(crate) fn get_record_or_default(&self, key: &str) -> anyhow::Result<Record> {
         let read_options = leveldb::options::ReadOptions::new();
-        // TODO make sure i32 is always positive and use only the lower 31 bits of the hash
-        let leveldb_key: i32 = (gxhash::gxhash32(key.as_bytes(), 0) & 0x7FFFFFFF) as i32;
+        let leveldb_key = leveldb_key_from_str(key);
 
         let record = self
             .leveldb
@@ -91,8 +114,7 @@ impl LevelDb {
     }
 }
 
-// TODO typed Key to impl utilites
-fn get_remote_path(key: &str) -> String {
+pub fn get_remote_path(key: &str) -> String {
     let md5_key = md5::compute(key);
     let b64_key = base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE, key);
 
@@ -107,7 +129,12 @@ struct SortVol {
 /// `volumes`: Volumes to use for storing the data.
 /// `replicas`: The number of replicas to create for the data. Default is 3.
 /// `subvolumes`: The number of subvolumes, i.e., disks per machine. Default is 10.
-fn get_volume(key: &str, volumes: &[String], replicas: usize, subvolumes: u32) -> Vec<String> {
+pub fn get_volume(
+    key: &str,
+    volumes: Vec<String>,
+    replicas: usize,
+    subvolumes: u32,
+) -> Vec<String> {
     // this is an intelligent way to pick the volume server for a file
     // stable in the volume server name (not position!)
     // and if more are added the correct portion will move (yay md5!)
@@ -131,19 +158,17 @@ fn get_volume(key: &str, volumes: &[String], replicas: usize, subvolumes: u32) -
         return vec![sorted_volumes[0].volume.clone()];
     }
 
-    let volume_paths = sorted_volumes
+    sorted_volumes
         .into_iter()
         .take(replicas) // safe because sorted_volumes is sorted in descending order
         .map(|volume| {
-            let subvolume_hash = u32::from(volume.score[12])
-                << 24 + u32::from(volume.score[13])
-                << 16 + u32::from(volume.score[14])
-                << 8 + u32::from(volume.score[15]);
+            let subvolume_hash = (u32::from(volume.score[12]) << 24)
+                + (u32::from(volume.score[13]) << 16)
+                + (u32::from(volume.score[14]) << 8)
+                + u32::from(volume.score[15]);
             format!("{}/sv{:02X}", volume.volume, subvolume_hash % subvolumes)
         })
-        .collect::<Vec<String>>();
-
-    volume_paths
+        .collect::<Vec<String>>()
 }
 
 #[cfg(test)]
@@ -247,10 +272,29 @@ mod tests {
         ];
 
         for (key, expected_volume) in tests {
-            let volume = get_volume(key, &volumes, 1, 3);
+            let volume = get_volume(key, volumes.clone(), 1, 3);
             println!("{:?}", volume);
             let volume_path = volume.first().unwrap();
             assert_eq!(volume_path, expected_volume);
+        }
+    }
+
+    #[test]
+    fn test_get_volume_with_replicas() {
+        let volumes = vec!["larry".to_string(), "moe".to_string(), "curly".to_string()];
+        let tests = vec![
+            ("hello", "larry/sv00"),
+            ("helloworld", "curly/sv01"),
+            ("world", "moe/sv02"),
+            ("blah", "curly/sv01"),
+            ("foo123", "moe/sv01"),
+        ];
+
+        for (key, expected_volume) in tests {
+            let volume = get_volume(key, volumes.clone(), 3, 3);
+            println!("{:?}", volume);
+            let volume_path = volume.first().unwrap();
+            assert_eq!(volume_path, expected_volume, "key: {}", key);
         }
     }
 
@@ -266,7 +310,7 @@ mod tests {
         ];
 
         for (key, expected_volume) in tests {
-            let volume = get_volume(key, &volumes, 1, 3);
+            let volume = get_volume(key, volumes.clone(), 1, 3);
             let volume_path = volume.first().unwrap();
             assert_eq!(volume_path, expected_volume);
         }
@@ -287,7 +331,7 @@ mod tests {
             ("hash", "zzz"), // `hash` key should now be on `zzz` without touching the others
         ];
         for (key, expected_volume) in tests {
-            let volume = get_volume(key, &volumes, 1, 3);
+            let volume = get_volume(key, volumes.clone(), 1, 3);
             let volume_path = volume.first().unwrap();
             assert_eq!(volume_path, expected_volume);
         }

@@ -15,6 +15,7 @@ gxhash = "3.4.1"
 leveldb = "0.8.6"
 log = "0.4.22"
 md5 = "0.7.0"
+reqwest = "0.12.7"
 serde = { version = "1.0.210", features = ["derive"] }
 tokio = { version = "1.40.0", features = ["full"] }
 warp = "0.3.7"
