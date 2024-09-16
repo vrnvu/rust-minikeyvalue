@@ -55,12 +55,12 @@ async fn main() -> anyhow::Result<()> {
         .and(warp::path::param())
         .and(warp::body::bytes())
         .and(warp::path::end())
-        .map(handle_put_record);
+        .map(handle_put_record); // TODO use and_then and handle errors with recover
 
     let get_record = warp::get()
         .and(warp::path::param())
         .and(warp::path::end())
-        .map(handle_get_record);
+        .map(handle_get_record); // TODO use and_then and handle errors with recover
 
     let api = put_record.or(get_record);
 
