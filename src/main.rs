@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     sync::{Arc, Mutex},
 };
 
@@ -52,49 +52,64 @@ async fn main() -> anyhow::Result<()> {
     let put_record = warp::put()
         .and(lock_keys.clone())
         .and(warp::header::optional::<u64>("content-length"))
-        .and(warp::path::param())
+        .and(warp::path::param::<String>())
         .and(warp::body::bytes())
         .and(warp::path::end())
-        .map(handle_put_record); // TODO use and_then and handle errors with recover
+        .and_then(handle_put_record);
 
     let get_record = warp::get()
-        .and(warp::path::param())
+        .and(warp::path::param::<String>())
         .and(warp::path::end())
-        .map(handle_get_record); // TODO use and_then and handle errors with recover
+        .and_then(handle_get_record);
 
-    let api = put_record.or(get_record);
+    let api = put_record.or(get_record).recover(handle_rejection);
 
     warp::serve(api).run(([127, 0, 0, 1], port)).await;
 
     Ok(())
 }
 
-fn handle_put_record(
+pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, warp::Rejection> {
+    let message = String::new();
+    let code = {
+        if err.is_not_found() {
+            warp::http::StatusCode::NOT_FOUND
+        } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
+            warp::http::StatusCode::METHOD_NOT_ALLOWED
+        } else {
+            warp::http::StatusCode::INTERNAL_SERVER_ERROR
+        }
+    };
+
+    Ok(warp::http::Response::builder().status(code).body(message))
+}
+
+async fn handle_put_record(
     lock_keys: Arc<Mutex<HashSet<String>>>,
     content_length: Option<u64>,
     key: String,
     value: Bytes,
-) -> impl warp::Reply {
+) -> Result<impl warp::Reply, warp::Rejection> {
     debug!("put_record: key: {}, value: {:?}", key, value);
     if content_length.is_none() {
-        return warp::http::Response::builder()
+        return Ok(warp::http::Response::builder()
             .status(warp::http::StatusCode::LENGTH_REQUIRED)
-            .body("Content-Length is required".to_string());
+            .body("Content-Length is required".to_string()));
     }
 
     let mut lock_keys = match lock_keys.lock() {
         Ok(lock_keys) => lock_keys,
         Err(e) => {
-            return warp::http::Response::builder()
+            return Ok(warp::http::Response::builder()
                 .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string())
+                .body(e.to_string()));
         }
     };
 
     if lock_keys.contains(&key) {
-        return warp::http::Response::builder()
+        return Ok(warp::http::Response::builder()
             .status(warp::http::StatusCode::CONFLICT)
-            .body(String::new());
+            .body(String::new()));
     }
 
     lock_keys.insert(key.clone());
@@ -103,14 +118,14 @@ fn handle_put_record(
 
     lock_keys.remove(&key);
 
-    warp::http::Response::builder()
+    Ok(warp::http::Response::builder()
         .status(warp::http::StatusCode::CREATED)
-        .body(key)
+        .body(key))
 }
 
-fn handle_get_record(key: String) -> impl warp::Reply {
+async fn handle_get_record(key: String) -> Result<impl warp::Reply, warp::Rejection> {
     debug!("get_record: key: {}", key);
-    warp::http::Response::builder()
+    Ok(warp::http::Response::builder()
         .status(warp::http::StatusCode::FOUND)
-        .body("TODO redirect to nginx volume server".to_string())
+        .body("TODO redirect to nginx volume server".to_string()))
 }
