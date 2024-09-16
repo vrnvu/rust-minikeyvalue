@@ -4,15 +4,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use anyhow::Context;
-use leveldb::database::Database;
-use leveldb::kv::KV;
-
 use bytes::Bytes;
 use clap::Parser;
-use log::{debug, error};
-use serde::{Deserialize, Serialize};
+use log::{debug, error, info};
 use warp::Filter;
+
+mod record;
 
 /// minikeyvalue cli
 #[derive(Parser, Debug)]
@@ -39,86 +36,6 @@ struct Cli {
     md5sum: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-enum Deleted {
-    No,
-    Soft,
-    Hard,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Record {
-    deleted: Deleted,
-    hash: String,
-    read_volumes: Vec<String>,
-}
-
-impl Record {
-    fn to_bytes(&self) -> anyhow::Result<Vec<u8>> {
-        bincode::serialize(self).map_err(|e| anyhow::anyhow!("Serialization error: {}", e))
-    }
-
-    fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
-        bincode::deserialize(bytes).map_err(|e| anyhow::anyhow!("Deserialization error: {}", e))
-    }
-}
-
-impl Default for Record {
-    fn default() -> Self {
-        Self {
-            deleted: Deleted::Hard,
-            hash: String::new(),
-            read_volumes: Vec::new(),
-        }
-    }
-}
-
-impl TryFrom<Option<Vec<u8>>> for Record {
-    type Error = anyhow::Error;
-
-    fn try_from(value: Option<Vec<u8>>) -> anyhow::Result<Self> {
-        match value {
-            Some(data) => Self::from_bytes(&data),
-            None => Ok(Record::default()),
-        }
-    }
-}
-
-struct LevelDb {
-    leveldb: Database<i32>,
-    verify_checksums: bool,
-}
-
-impl LevelDb {
-    pub fn new(ldb_path: &Path, verify_checksums: bool) -> anyhow::Result<Self> {
-        let mut leveldb_options = leveldb::options::Options::new();
-        leveldb_options.create_if_missing = true;
-
-        let leveldb = leveldb::database::Database::open(&ldb_path, leveldb_options)
-            .with_context(|| format!("Failed to open LevelDB at path: {}", ldb_path.display()))?;
-
-        Ok(Self {
-            leveldb,
-            verify_checksums,
-        })
-    }
-
-    pub fn get_record_or_default(&self, key: &str) -> anyhow::Result<Record> {
-        let read_options = leveldb::options::ReadOptions::new();
-        // TODO make sure i32 is always positive and use only the lower 31 bits of the hash
-        let leveldb_key: i32 = (gxhash::gxhash32(key.as_bytes(), 0) & 0x7FFFFFFF) as i32;
-
-        let record = self
-            .leveldb
-            .get(read_options, leveldb_key)
-            .with_context(|| format!("Failed to get key {} from LevelDB", key))?;
-
-        record
-            .try_into()
-            .with_context(|| format!("Failed to deserialize record for key {}", key))
-    }
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -134,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     let verify_checksums = cli.md5sum;
 
     let leveldb = {
-        let leveldb = LevelDb::new(leveldb_path, verify_checksums)?;
+        let leveldb = record::LevelDb::new(leveldb_path, verify_checksums)?;
         let leveldb = Arc::new(Mutex::new(leveldb));
         warp::any().map(move || leveldb.clone())
     };
@@ -183,12 +100,12 @@ pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, 
 
 async fn handle_put_record(
     lock_keys: Arc<Mutex<HashSet<String>>>,
-    leveldb: Arc<Mutex<LevelDb>>,
+    leveldb: Arc<Mutex<record::LevelDb>>,
     content_length: Option<u64>,
     key: String,
     value: Bytes,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    debug!("put_record: key: {}, value: {:?}", key, value);
+    info!("put_record: key: {}, value: {:?}", key, value);
     if content_length.is_none() {
         debug!("put_record: content_length is none for key: {}", key);
         return Ok(warp::http::Response::builder()
@@ -225,7 +142,7 @@ async fn handle_put_record(
         }
     };
 
-    let record = match leveldb.get_record_or_default(&key) {
+    let record: record::Record = match leveldb.get_record_or_default(&key) {
         Ok(record) => record,
         Err(e) => {
             error!(
@@ -238,7 +155,7 @@ async fn handle_put_record(
         }
     };
 
-    if let Deleted::No = record.deleted {
+    if let record::Deleted::No = record.deleted() {
         return Ok(warp::http::Response::builder()
             .status(warp::http::StatusCode::CONFLICT)
             .body("Forbidden to overwrite with PUT".to_string()));
@@ -255,7 +172,7 @@ async fn handle_put_record(
 }
 
 async fn handle_get_record(key: String) -> Result<impl warp::Reply, warp::Rejection> {
-    debug!("get_record: key: {}", key);
+    info!("get_record: key: {}", key);
     Ok(warp::http::Response::builder()
         .status(warp::http::StatusCode::FOUND)
         .body("TODO redirect to nginx volume server".to_string()))
