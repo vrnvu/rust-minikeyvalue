@@ -51,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
 
     let put_record = warp::put()
         .and(db.clone())
+        .and(warp::header::optional::<u64>("content-length"))
         .and(warp::path::param())
         .and(warp::body::bytes())
         .and(warp::path::end())
@@ -71,10 +72,17 @@ async fn main() -> anyhow::Result<()> {
 
 fn handle_put_record(
     db: Arc<Mutex<HashMap<String, Bytes>>>,
+    content_length: Option<u64>,
     key: String,
     value: Bytes,
 ) -> impl warp::Reply {
     debug!("put_record: key: {}, value: {:?}", key, value);
+    if content_length.is_none() {
+        return warp::http::Response::builder()
+            .status(warp::http::StatusCode::LENGTH_REQUIRED)
+            .body("Content-Length is required".to_string());
+    }
+
     let mut db = match db.lock() {
         Ok(db) => db,
         Err(e) => {
