@@ -95,15 +95,14 @@ class TestMiniKeyValue(unittest.TestCase):
       r = requests.delete(k)
       self.assertEqual(r.status_code, 204)
 
-# TODO
-#   def test_range_request(self):
-#     key = self.get_fresh_key()
-#     r = requests.put(key, data="onyou")
-#     self.assertEqual(r.status_code, 201)
+  def test_range_request(self):
+    key = self.get_fresh_key()
+    r = requests.put(key, data="onyou")
+    self.assertEqual(r.status_code, 201)
 
-#     r = requests.get(key, headers={"Range": "bytes=2-5"})
-#     self.assertEqual(r.status_code, 206)
-#     self.assertEqual(r.text, "you")
+    r = requests.get(key, headers={"Range": "bytes=2-5"})
+    self.assertEqual(r.status_code, 206)
+    self.assertEqual(r.text, "you")
 
   def test_nonexistent_key(self):
     key = self.get_fresh_key()
