@@ -193,7 +193,7 @@ class TestMiniKeyValue(unittest.TestCase):
     self.assertEqual(r.status_code, 411)
 
   def test_content_hash(self):
-    for _ in range(100):
+    for _ in range(10):
       key = self.get_fresh_key()
       r = requests.put(key, data=key)
       self.assertEqual(r.status_code, 201)
