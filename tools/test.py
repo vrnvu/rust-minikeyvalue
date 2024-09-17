@@ -129,7 +129,11 @@ class TestMiniKeyValue(unittest.TestCase):
     self.assertEqual(int(r.headers['content-length']), len(data))
 
   # TODO this test passes locally but fails on github actions because of the size. Github sucks.
+<<<<<<< Updated upstream
   # def test_large_key(self):
+=======
+  def test_large_key(self):
+>>>>>>> Stashed changes
     key = self.get_fresh_key()
     data = b"a"*(16*1024*1024)
 

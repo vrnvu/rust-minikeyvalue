@@ -1,10 +1,11 @@
-use std::{collections::HashSet, net::IpAddr, path::Path, str::FromStr, sync::Arc};
+use std::{collections::HashSet, io::Cursor, net::IpAddr, path::Path, str::FromStr, sync::Arc};
 
 use bytes::Bytes;
 use clap::Parser;
 use log::{debug, error, info};
 use rand::{seq::SliceRandom, SeedableRng};
 use tokio::sync::{Mutex, MutexGuard};
+use tokio_util::io::ReaderStream;
 use warp::Filter;
 
 mod record;
@@ -234,7 +235,7 @@ async fn handle_put_record(
         let remote_url = format!("http://{}{}", volume, remote_replica_volume_path);
         // TODO is this value Bytes an efficient buffer?
         info!("put_record key: {} remote_url: {}", key, remote_url);
-        match remote_put(remote_url, &value).await {
+        match remote_put(remote_url, value.clone()).await {
             Ok(_) => (),
             Err(e) => {
                 error!(
@@ -287,13 +288,14 @@ async fn handle_put_record(
         .body(String::new()))
 }
 
-async fn remote_put(remote_url: String, value: &bytes::Bytes) -> anyhow::Result<()> {
+async fn remote_put(remote_url: String, bytes: Bytes) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
-    let res = client
-        .put(remote_url.clone())
-        .body(value.clone())
-        .send()
-        .await?;
+
+    let cursor = Cursor::new(bytes);
+    let stream = ReaderStream::new(cursor);
+    let body = reqwest::Body::wrap_stream(stream);
+    let res = client.put(remote_url.clone()).body(body).send().await?;
+
     if res.status().is_success() {
         if res.status().as_u16() != warp::http::StatusCode::CREATED.as_u16()
             && res.status().as_u16() != warp::http::StatusCode::NO_CONTENT.as_u16()
