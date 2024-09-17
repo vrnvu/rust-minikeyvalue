@@ -4,7 +4,7 @@ use bytes::Bytes;
 use clap::Parser;
 use log::{debug, error, info};
 use rand::{seq::SliceRandom, SeedableRng};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 use warp::Filter;
 
 mod record;
@@ -132,6 +132,24 @@ struct PutRecordContext {
     verify_checksums: bool,
 }
 
+struct LevelDbKeyGuard<'a> {
+    guard: MutexGuard<'a, HashSet<String>>,
+    key: String,
+}
+
+impl<'a> LevelDbKeyGuard<'a> {
+    async fn lock(lock_keys: &'a Mutex<HashSet<String>>, key: String) -> Self {
+        let guard = lock_keys.lock().await;
+        Self { guard, key }
+    }
+}
+
+impl<'a> Drop for LevelDbKeyGuard<'a> {
+    fn drop(&mut self) {
+        self.guard.remove(&self.key);
+    }
+}
+
 async fn handle_put_record(
     lock_keys: Arc<Mutex<HashSet<String>>>,
     leveldb: Arc<Mutex<record::LevelDb>>,
@@ -158,16 +176,16 @@ async fn handle_put_record(
             .body("Content-Length and data can not be empty".to_string()));
     }
 
-    // TODO: handle mutex better for lock_keys and leveldb
-    let mut lock_keys = lock_keys.lock().await;
+    let mut lock_keys = LevelDbKeyGuard::lock(&lock_keys, key.clone()).await;
 
-    if lock_keys.contains(&key) {
+    if lock_keys.guard.contains(&key) {
+        debug!("put_record: key: {} already locked", key);
         return Ok(warp::http::Response::builder()
             .status(warp::http::StatusCode::CONFLICT)
             .body(String::new()));
     }
 
-    lock_keys.insert(key.clone());
+    lock_keys.guard.insert(key.clone());
 
     let leveldb = leveldb.lock().await;
     let record: record::Record = match leveldb.get_record_or_default(&key) {
@@ -260,8 +278,6 @@ async fn handle_put_record(
         }
     }
 
-    lock_keys.remove(&key);
-
     Ok(warp::http::Response::builder()
         .status(warp::http::StatusCode::CREATED)
         .body(String::new()))
@@ -303,22 +319,29 @@ async fn handle_get_record(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     info!("get_record: key: {}", key);
 
-    let leveldb = leveldb.lock().await;
-    let record = match leveldb.get_record_or_default(&key) {
-        Ok(record) => record,
-        Err(e) => {
-            error!(
-                "get_record: failed to get record {} from leveldb: {}",
-                key, e
-            );
-            return Ok(warp::http::Response::builder()
-                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string()));
+    let record = {
+        let leveldb = leveldb.lock().await;
+        match leveldb.get_record_or_default(&key) {
+            Ok(record) => record,
+            Err(e) => {
+                error!(
+                    "get_record: failed to get record {} from leveldb: {}",
+                    key, e
+                );
+                return Ok(warp::http::Response::builder()
+                    .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(e.to_string()));
+            }
         }
     };
 
     // TODO fallbacks
     if record.deleted() != record::Deleted::No {
+        info!(
+            "get_record: key: {} not found, record deleted: {:?}",
+            key,
+            record.deleted()
+        );
         return Ok(warp::http::Response::builder()
             .status(warp::http::StatusCode::NOT_FOUND)
             .header("Content-Md5", record.hash())
