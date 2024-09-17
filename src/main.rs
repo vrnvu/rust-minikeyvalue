@@ -173,6 +173,7 @@ async fn handle_put_record(
     let record: record::Record = match leveldb.get_record_or_default(&key) {
         Ok(record) => record,
         Err(e) => {
+            lock_keys.remove(&key);
             error!(
                 "put_record: failed to get record {} from leveldb: {}",
                 key, e
@@ -184,6 +185,7 @@ async fn handle_put_record(
     };
 
     if let record::Deleted::No = record.deleted() {
+        lock_keys.remove(&key);
         return Ok(warp::http::Response::builder()
             .status(warp::http::StatusCode::CONFLICT)
             .body("Forbidden to overwrite with PUT".to_string()));
@@ -200,6 +202,7 @@ async fn handle_put_record(
         Ok(_) => (),
         Err(e) => {
             error!("put_record: failed to put record {} in leveldb: {}", key, e);
+            lock_keys.remove(&key);
             return Ok(warp::http::Response::builder()
                 .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
                 .body(e.to_string()));
@@ -225,6 +228,7 @@ async fn handle_put_record(
                 match leveldb.put_record(&key, record) {
                     Ok(_) => (),
                     Err(e) => {
+                        lock_keys.remove(&key);
                         error!("put_record: failed to put record {} in leveldb: {}", key, e);
                         return Ok(warp::http::Response::builder()
                             .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
@@ -232,6 +236,7 @@ async fn handle_put_record(
                     }
                 }
 
+                lock_keys.remove(&key);
                 return Ok(warp::http::Response::builder()
                     .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
                     .body(e.to_string()));
@@ -250,6 +255,7 @@ async fn handle_put_record(
     match leveldb.put_record(&key, record) {
         Ok(_) => (),
         Err(e) => {
+            lock_keys.remove(&key);
             error!(
                 "put_record: failed to put record with value_md5_hash {} in leveldb: {}",
                 key, e
@@ -261,7 +267,6 @@ async fn handle_put_record(
     }
 
     lock_keys.remove(&key);
-
     Ok(warp::http::Response::builder()
         .status(warp::http::StatusCode::CREATED)
         .body(String::new()))
