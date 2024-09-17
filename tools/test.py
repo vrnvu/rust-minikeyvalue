@@ -128,21 +128,20 @@ class TestMiniKeyValue(unittest.TestCase):
     # redirect, content length should be size of data
     self.assertEqual(int(r.headers['content-length']), len(data))
 
-# TODO
-#   def test_large_key(self):
-#     key = self.get_fresh_key()
+  # def test_large_key(self):
+  #   key = self.get_fresh_key()
 
-#     data = b"a"*(16*1024*1024)
+  #   data = b"a"*(16*1024*1024)
 
-#     r = requests.put(key, data=data)
-#     self.assertEqual(r.status_code, 201)
+  #   r = requests.put(key, data=data)
+  #   self.assertEqual(r.status_code, 201)
 
-#     r = requests.get(key)
-#     self.assertEqual(r.status_code, 200)
-#     self.assertEqual(r.content, data)
+  #   r = requests.get(key)
+  #   self.assertEqual(r.status_code, 200)
+  #   self.assertEqual(r.content, data)
 
-#     r = requests.delete(key)
-#     self.assertEqual(r.status_code, 204)
+  #   r = requests.delete(key)
+  #   self.assertEqual(r.status_code, 204)
 
 # TODO
 #   def test_json_list(self):
@@ -193,15 +192,14 @@ class TestMiniKeyValue(unittest.TestCase):
     r = requests.put(key, data="")
     self.assertEqual(r.status_code, 411)
 
-  # TODO
-  # def test_content_hash(self):
-  #   for _ in range(100):
-  #     key = self.get_fresh_key()
-  #     r = requests.put(key, data=key)
-  #     self.assertEqual(r.status_code, 201)
+  def test_content_hash(self):
+    for _ in range(10):
+      key = self.get_fresh_key()
+      r = requests.put(key, data=key)
+      self.assertEqual(r.status_code, 201)
 
-  #     r = requests.head(key, allow_redirects=False)
-  #     self.assertEqual(r.headers['Content-Md5'], hashlib.md5(key).hexdigest())
+      r = requests.head(key, allow_redirects=False)
+      self.assertEqual(r.headers['Content-Md5'], hashlib.md5(key).hexdigest())
 
 if __name__ == '__main__':
   # wait for servers
