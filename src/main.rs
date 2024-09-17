@@ -155,6 +155,12 @@ async fn handle_put_record(
             .body("Content-Length is required".to_string()));
     }
 
+    if key.is_empty() {
+        return Ok(warp::http::Response::builder()
+            .status(warp::http::StatusCode::LENGTH_REQUIRED)
+            .body("Key cannot be empty".to_string()));
+    }
+
     // TODO: handle mutex better for lock_keys and leveldb
     let mut lock_keys = lock_keys.lock().await;
 
