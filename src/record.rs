@@ -52,7 +52,7 @@ impl Record {
 impl Default for Record {
     fn default() -> Self {
         Self {
-            deleted: Deleted::Hard,
+            deleted: Deleted::Init,
             hash: String::new(),
             read_volumes: Vec::new(),
         }

@@ -460,7 +460,6 @@ async fn handle_delete_record(
 
     lock_keys.guard.insert(key.clone());
 
-    // TODO get_or_default when deleting? review
     let record = match leveldb.lock().await.get_record_or_default(&key) {
         Ok(record) => record,
         Err(e) => {
