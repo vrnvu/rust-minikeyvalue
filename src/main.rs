@@ -485,7 +485,7 @@ async fn handle_delete_record(
     }
 
     let deleted_record = record::Record::new(
-        record::Deleted::Init,
+        record::Deleted::Soft,
         record.hash().to_string(),
         record.read_volumes().to_vec(),
     );
