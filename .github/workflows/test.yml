@@ -30,7 +30,7 @@ jobs:
     - name: Install apt dependencies
       run: |
           sudo apt-get update
-          sudo apt-get -y --no-install-recommends install rustc nginx build-essential 
+          sudo apt-get -y --no-install-recommends install nginx build-essential cmake libsnappy-dev libleveldb-dev libpcre3-dev
 
     - name: Run cargo fmt
       run: cargo fmt --all -- --check
