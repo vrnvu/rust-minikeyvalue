@@ -278,8 +278,7 @@ async fn handle_put_record(
     }
 
     let value_md5_hash = if verify_checksums {
-        let hash = md5::compute(value);
-        format!("{:x}", hash)
+        format!("{:x}", md5::compute(value))
     } else {
         String::new()
     };
