@@ -148,11 +148,14 @@ async fn handle_put_record(
     } = put_record_context;
 
     info!("put_record: key: {}, value: {:?}", key, value);
-    if content_length.is_none() {
-        debug!("put_record: content_length is none for key: {}", key);
+    if content_length.is_none() || value.is_empty() {
+        debug!(
+            "put_record: content_length is none or value is empty for key: {}",
+            key
+        );
         return Ok(warp::http::Response::builder()
             .status(warp::http::StatusCode::LENGTH_REQUIRED)
-            .body("Content-Length is required".to_string()));
+            .body("Content-Length and data can not be empty".to_string()));
     }
 
     // TODO: handle mutex better for lock_keys and leveldb
@@ -299,6 +302,7 @@ async fn handle_get_record(
     subvolumes: u32,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     info!("get_record: key: {}", key);
+
     let leveldb = leveldb.lock().await;
     let record = match leveldb.get_record_or_default(&key) {
         Ok(record) => record,

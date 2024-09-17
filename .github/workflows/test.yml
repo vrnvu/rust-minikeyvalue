@@ -1,0 +1,63 @@
+name: Tests
+
+on: 
+  push:
+    branches:
+      - master 
+  pull_request:
+    branches:
+      - master 
+
+jobs:
+  unit:
+    name: Tests
+    runs-on: ubuntu-latest
+    env: 
+      RUSTFLAGS: "-C target-cpu=native" # Required by Gxhash requires aes and sse2 intrinsics
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+    
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable 
+
+    - name: Install cargo components
+      run: |
+        rustup component add rustfmt
+        rustup component add clippy
+
+    - name: Install apt dependencies
+      run: |
+          sudo apt-get update
+          sudo apt-get -y --no-install-recommends install nginx build-essential cmake libsnappy-dev libleveldb-dev libpcre3-dev
+
+    - name: Run cargo fmt
+      run: cargo fmt --all -- --check
+
+    - name: Build and test
+      run: |
+        cargo build --verbose --all
+        cargo test --verbose --all
+
+    - name: Run cargo clippy
+      run: |
+        cargo clippy --all-targets --all -- --deny=warnings
+
+    - name: Set log permissions
+      run: |
+        sudo mkdir -p /var/log/nginx
+        sudo chmod 777 /var/log/nginx /var/log/nginx/*
+
+    - name: Install Python Requirements
+      run: pip3 install --no-cache-dir -r requirements.txt
+
+    - name: Set execute permissions for test script
+      run: chmod +x ./tools/test.py && chmod +x ./tools/bringup.sh
+
+    - name: Integration Test
+      run: |
+        (./tools/bringup.sh &)
+        ./tools/test.py
