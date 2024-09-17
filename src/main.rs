@@ -464,8 +464,10 @@ async fn handle_delete_record(
         }
     };
 
-    // TODO unlink and soft delete
-    if record.deleted() == record::Deleted::Hard {
+    // TODO unlink and soft delete, for now we assume soft is always deleted
+    // This probalby will make some tests fail with link/unlink
+    if record.deleted() == record::Deleted::Hard || record.deleted() == record::Deleted::Soft {
+        debug!("delete_record: key: {} already deleted", key);
         return Ok(warp::http::Response::builder()
             .status(warp::http::StatusCode::NOT_FOUND)
             .body(String::new()));
