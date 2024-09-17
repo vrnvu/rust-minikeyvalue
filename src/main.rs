@@ -91,7 +91,17 @@ async fn main() -> anyhow::Result<()> {
         .and(warp::path::end())
         .and_then(handle_put_record);
 
+    let volumes_clone = volumes.clone();
     let get_record = warp::get()
+        .and(leveldb.clone())
+        .and(warp::path::param::<String>())
+        .and(warp::path::end())
+        .and(warp::any().map(move || volumes_clone.clone()))
+        .and(warp::any().map(move || replicas))
+        .and(warp::any().map(move || subvolumes))
+        .and_then(handle_get_record);
+
+    let head_record = warp::head()
         .and(leveldb.clone())
         .and(warp::path::param::<String>())
         .and(warp::path::end())
@@ -109,6 +119,7 @@ async fn main() -> anyhow::Result<()> {
 
     let api = put_record
         .or(get_record)
+        .or(head_record)
         .or(delete_record)
         .recover(handle_rejection);
 
