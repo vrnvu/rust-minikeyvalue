@@ -44,7 +44,9 @@ Retrieve the value associated with a key.
 
 * **Status Code**: 302 (redirect to nginx volume server)
 * **Description**: Redirects to the nginx volume server to retrieve the value associated with the key.
-* **Example**: `curl -v -L localhost:3000/wehave`
+* **Examples**: 
+  * GET request: `curl -v -L localhost:3000/wehave`
+  * HEAD request: `curl -v -L -I localhost:3000/wehave`
 
 #### GET /key (File)
 Retrieve a file associated with a key.
