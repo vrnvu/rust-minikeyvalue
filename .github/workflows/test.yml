@@ -1,0 +1,27 @@
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  unit:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+    - name: Install Rust/nginx
+      run: |
+        sudo apt-get update
+        sudo apt-get -y --no-install-recommends install rustc nginx build-essential
+    - name: Set log permissions
+      run: |
+        sudo mkdir -p /var/log/nginx
+        sudo chmod 777 /var/log/nginx /var/log/nginx/*
+    - name: Unit Tests
+      run: cargo test 
+    - name: Install Python Requirements
+      run: pip3 install --no-cache-dir -r requirements.txt
+    - name: Integration Test
+      run: |
+        (./tools/bringup.sh &)
+        ./tools/test.py
