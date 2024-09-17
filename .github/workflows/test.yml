@@ -15,27 +15,46 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
-    - name: Cache Cargo
-      uses: actions/cache@v3
+    
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
       with:
-        path: target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-    - name: Install Rust/nginx
+        profile: minimal
+        toolchain: stable 
+
+    - name: Install cargo components
       run: |
-        sudo apt-get update
-        sudo apt-get -y --no-install-recommends install rustc nginx build-essential cmake libsnappy-dev libleveldb-dev libpcre3-dev
+        rustup component add rustfmt
+        rustup component add clippy
+
+    - name: Install apt dependencies
+      run: |
+          sudo apt-get update
+          sudo apt-get -y --no-install-recommends install rustc nginx build-essential 
+
+    - name: Run cargo fmt
+      run: cargo fmt --all -- --check
+
+    - name: Build and test
+      run: |
+        export RUSTFLAGS="-C target-cpu=native"
+        cargo build --verbose --all
+        cargo test --verbose --all
+
+    - name: Run cargo clippy
+      run: cargo clippy --all-targets --all -- --deny=warnings
+
     - name: Set log permissions
       run: |
         sudo mkdir -p /var/log/nginx
         sudo chmod 777 /var/log/nginx /var/log/nginx/*
-    - name: Unit Tests
-      run: |
-        export RUSTFLAGS="-C target-cpu=native"
-        cargo test --release
+
     - name: Install Python Requirements
       run: pip3 install --no-cache-dir -r requirements.txt
+
+    - name: Set execute permissions for test script
+      run: chmod +x ./tools/test.py && chmod +x ./tools/bringup.sh
+
     - name: Integration Test
       run: |
         (./tools/bringup.sh &)
