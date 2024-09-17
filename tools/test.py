@@ -79,22 +79,21 @@ class TestMiniKeyValue(unittest.TestCase):
     r = requests.put(key, data="onyou")
     self.assertEqual(r.status_code, 201)
 
-  # TODO
-  # def test_10keys(self):
-  #   keys = [self.get_fresh_key() for _ in range(10)]
+  def test_10keys(self):
+    keys = [self.get_fresh_key() for _ in range(10)]
 
-  #   for k in keys:
-  #     r = requests.put(k, data=hashlib.md5(k).hexdigest())
-  #     self.assertEqual(r.status_code, 201)
+    for k in keys:
+      r = requests.put(k, data=hashlib.md5(k).hexdigest())
+      self.assertEqual(r.status_code, 201)
 
-  #   for k in keys:
-  #     r = requests.get(k)
-  #     self.assertEqual(r.status_code, 200)
-  #     self.assertEqual(r.text, hashlib.md5(k).hexdigest())
+    for k in keys:
+      r = requests.get(k)
+      self.assertEqual(r.status_code, 200)
+      self.assertEqual(r.text, hashlib.md5(k).hexdigest())
 
-  #   for k in keys:
-  #     r = requests.delete(k)
-  #     self.assertEqual(r.status_code, 204)
+    for k in keys:
+      r = requests.delete(k)
+      self.assertEqual(r.status_code, 204)
 
 # TODO
 #   def test_range_request(self):
