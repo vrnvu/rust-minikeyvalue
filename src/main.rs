@@ -100,7 +100,16 @@ async fn main() -> anyhow::Result<()> {
         .and(warp::any().map(move || subvolumes))
         .and_then(handle_get_record);
 
-    let api = put_record.or(get_record).recover(handle_rejection);
+    let delete_record = warp::delete()
+        .and(leveldb.clone())
+        .and(warp::path::param::<String>())
+        .and(warp::path::end())
+        .and_then(handle_delete_record);
+
+    let api = put_record
+        .or(get_record)
+        .or(delete_record)
+        .recover(handle_rejection);
 
     // Listen ipv4 and ipv6
     let addr = IpAddr::from_str("::0").unwrap();
@@ -187,8 +196,7 @@ async fn handle_put_record(
 
     lock_keys.guard.insert(key.clone());
 
-    let leveldb = leveldb.lock().await;
-    let record: record::Record = match leveldb.get_record_or_default(&key) {
+    let record = match leveldb.lock().await.get_record_or_default(&key) {
         Ok(record) => record,
         Err(e) => {
             error!(
@@ -214,7 +222,7 @@ async fn handle_put_record(
         String::new(),
         replicas_volumes.clone(),
     );
-    match leveldb.put_record(&key, record) {
+    match leveldb.lock().await.put_record(&key, record) {
         Ok(_) => (),
         Err(e) => {
             error!("put_record: failed to put record {} in leveldb: {}", key, e);
@@ -240,7 +248,7 @@ async fn handle_put_record(
                 // https://github.com/geohot/minikeyvalue/pull/48/files
                 let record =
                     record::Record::new(record::Deleted::Soft, String::new(), replicas_volumes);
-                match leveldb.put_record(&key, record) {
+                match leveldb.lock().await.put_record(&key, record) {
                     Ok(_) => (),
                     Err(e) => {
                         error!("put_record: failed to put record {} in leveldb: {}", key, e);
@@ -265,7 +273,7 @@ async fn handle_put_record(
     };
 
     let record = record::Record::new(record::Deleted::No, value_md5_hash, replicas_volumes);
-    match leveldb.put_record(&key, record) {
+    match leveldb.lock().await.put_record(&key, record) {
         Ok(_) => (),
         Err(e) => {
             error!(
@@ -423,4 +431,55 @@ async fn remote_head(remote_url: &str) -> anyhow::Result<()> {
             res.status()
         ))
     }
+}
+async fn handle_delete_record(
+    leveldb: Arc<Mutex<record::LevelDb>>,
+    key: String,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    info!("delete_record: key: {}", key);
+
+    // TODO get_or_default when deleting? review
+    let record = match leveldb.lock().await.get_record_or_default(&key) {
+        Ok(record) => record,
+        Err(e) => {
+            error!(
+                "delete_record: failed to get record {} from leveldb: {}",
+                key, e
+            );
+            return Ok(warp::http::Response::builder()
+                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(e.to_string()));
+        }
+    };
+
+    // TODO unlink and soft delete
+    if record.deleted() == record::Deleted::Hard {
+        return Ok(warp::http::Response::builder()
+            .status(warp::http::StatusCode::NOT_FOUND)
+            .body(String::new()));
+    }
+
+    let deleted_record = record::Record::new(
+        record::Deleted::Init,
+        record.hash().to_string(),
+        record.read_volumes().to_vec(),
+    );
+    match leveldb.lock().await.put_record(&key, deleted_record) {
+        Ok(_) => (),
+        Err(e) => {
+            error!(
+                "delete_record: failed to put deleted record {} in leveldb: {}",
+                key, e
+            );
+            return Ok(warp::http::Response::builder()
+                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(e.to_string()));
+        }
+    }
+
+    // TODO unlink
+
+    Ok(warp::http::Response::builder()
+        .status(warp::http::StatusCode::NO_CONTENT)
+        .body(String::new()))
 }
