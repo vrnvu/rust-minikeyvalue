@@ -31,7 +31,9 @@ jobs:
         sudo mkdir -p /var/log/nginx
         sudo chmod 777 /var/log/nginx /var/log/nginx/*
     - name: Unit Tests
-      run: cargo test 
+      run: |
+        export RUSTFLAGS="-C target-cpu=native"
+        cargo test --release
     - name: Install Python Requirements
       run: pip3 install --no-cache-dir -r requirements.txt
     - name: Integration Test
