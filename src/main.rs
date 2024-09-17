@@ -229,21 +229,6 @@ async fn handle_put_record(
 
     // TODO partNumber
     let replicas_volumes = record::get_volume(&key, volumes, replicas, subvolumes);
-    let record = record::Record::new(
-        record::Deleted::Init,
-        String::new(),
-        replicas_volumes.clone(),
-    );
-    match leveldb.lock().await.put_record(&key, record) {
-        Ok(_) => (),
-        Err(e) => {
-            error!("put_record: failed to put record {} in leveldb: {}", key, e);
-            return Ok(warp::http::Response::builder()
-                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string()));
-        }
-    }
-
     for volume in replicas_volumes.clone() {
         let remote_replica_volume_path = record::get_remote_path(&key);
         let remote_url = format!("http://{}{}", volume, remote_replica_volume_path);
@@ -257,7 +242,7 @@ async fn handle_put_record(
                     key, volume, remote_replica_volume_path, e
                 );
 
-                // https://github.com/geohot/minikeyvalue/pull/48/files
+                // In case of error we want to mark the record as Deleted::Soft in the local leveldb
                 let record =
                     record::Record::new(record::Deleted::Soft, String::new(), replicas_volumes);
                 match leveldb.lock().await.put_record(&key, record) {
@@ -460,7 +445,6 @@ async fn handle_delete_record(
 
     lock_keys.guard.insert(key.clone());
 
-    // TODO get_or_default when deleting? review
     let record = match leveldb.lock().await.get_record_or_default(&key) {
         Ok(record) => record,
         Err(e) => {

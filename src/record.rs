@@ -52,7 +52,7 @@ impl Record {
 impl Default for Record {
     fn default() -> Self {
         Self {
-            deleted: Deleted::Hard,
+            deleted: Deleted::Init,
             hash: String::new(),
             read_volumes: Vec::new(),
         }
@@ -221,7 +221,7 @@ mod tests {
     fn test_record_default() -> anyhow::Result<()> {
         let record = Record::default();
         let expected_record = Record {
-            deleted: Deleted::Hard,
+            deleted: Deleted::Init,
             hash: String::new(),
             read_volumes: Vec::new(),
         };
