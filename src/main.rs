@@ -305,6 +305,13 @@ async fn handle_get_record(
     subvolumes: u32,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     info!("get_record: key: {}", key);
+
+    if key.is_empty() {
+        return Ok(warp::http::Response::builder()
+            .status(warp::http::StatusCode::LENGTH_REQUIRED)
+            .body("Key cannot be empty".to_string()));
+    }
+
     let leveldb = leveldb.lock().await;
     let record = match leveldb.get_record_or_default(&key) {
         Ok(record) => record,
