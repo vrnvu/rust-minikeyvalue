@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::Path, sync::Arc};
+use std::{collections::HashSet, net::IpAddr, path::Path, str::FromStr, sync::Arc};
 
 use bytes::Bytes;
 use clap::Parser;
@@ -102,7 +102,9 @@ async fn main() -> anyhow::Result<()> {
 
     let api = put_record.or(get_record).recover(handle_rejection);
 
-    warp::serve(api).run(([127, 0, 0, 1], port)).await;
+    // Listen ipv4 and ipv6
+    let addr = IpAddr::from_str("::0").unwrap();
+    warp::serve(api).run((addr, port)).await;
 
     Ok(())
 }
