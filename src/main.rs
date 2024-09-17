@@ -187,7 +187,6 @@ async fn handle_put_record(
     } = put_record_context;
 
     info!("put_record: key: {}, value: {:?}", key, value);
-    debug!("put_record: value size is: {:?}", value.len());
     if content_length.is_none() || value.is_empty() {
         debug!(
             "put_record: content_length is none or value is empty for key: {}",
@@ -279,9 +278,7 @@ async fn handle_put_record(
     }
 
     let value_md5_hash = if verify_checksums {
-        debug!("put_record: verifying checksums for key: {}", key);
-        let hash = md5::compute(value);
-        format!("{:x}", hash)
+        format!("{:x}", md5::compute(value))
     } else {
         String::new()
     };
@@ -309,7 +306,7 @@ async fn remote_put(remote_url: String, value: &bytes::Bytes) -> anyhow::Result<
     let client = reqwest::Client::new();
     let res = client
         .put(remote_url.clone())
-        .body(reqwest::Body::from(value.clone()))
+        .body(value.clone())
         .send()
         .await?;
     if res.status().is_success() {
