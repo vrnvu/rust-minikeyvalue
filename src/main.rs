@@ -388,12 +388,12 @@ async fn handle_get_record(
                 .body(String::new()))
         }
         None => {
-            info!("get_record: key: {} not found", key);
+            info!("get_record: key: {} not found in any volume", key);
             Ok(warp::http::Response::builder()
                 .header("Key-Volumes", record.read_volumes().join(","))
                 .header("Key-Balance", needs_rebalance_header)
                 .header("Content-Length", "0")
-                .status(warp::http::StatusCode::NOT_FOUND)
+                .status(warp::http::StatusCode::GONE)
                 .body(String::new()))
         }
     };
