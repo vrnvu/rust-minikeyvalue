@@ -32,6 +32,14 @@ impl Record {
         self.deleted
     }
 
+    pub(crate) fn hash(&self) -> &str {
+        &self.hash
+    }
+
+    pub(crate) fn read_volumes(&self) -> &Vec<String> {
+        &self.read_volumes
+    }
+
     fn to_bytes(&self) -> anyhow::Result<Vec<u8>> {
         bincode::serialize(self).map_err(|e| anyhow::anyhow!("Serialization error: {}", e))
     }

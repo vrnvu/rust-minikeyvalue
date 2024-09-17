@@ -3,6 +3,7 @@ use std::{collections::HashSet, path::Path, sync::Arc};
 use bytes::Bytes;
 use clap::Parser;
 use log::{debug, error, info};
+use rand::{seq::SliceRandom, SeedableRng};
 use tokio::sync::Mutex;
 use warp::Filter;
 
@@ -75,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let put_record_context = PutRecordContext {
-        volumes,
+        volumes: volumes.clone(),
         replicas,
         subvolumes,
         verify_checksums,
@@ -91,8 +92,12 @@ async fn main() -> anyhow::Result<()> {
         .and_then(handle_put_record);
 
     let get_record = warp::get()
+        .and(leveldb.clone())
         .and(warp::path::param::<String>())
         .and(warp::path::end())
+        .and(warp::any().map(move || volumes.clone()))
+        .and(warp::any().map(move || replicas))
+        .and(warp::any().map(move || subvolumes))
         .and_then(handle_get_record);
 
     let api = put_record.or(get_record).recover(handle_rejection);
@@ -208,6 +213,20 @@ async fn handle_put_record(
                     "put_record: failed to put record {} in remote replica volume {} with path {}: {}",
                     key, volume, remote_replica_volume_path, e
                 );
+
+                // https://github.com/geohot/minikeyvalue/pull/48/files
+                let record =
+                    record::Record::new(record::Deleted::Soft, String::new(), replicas_volumes);
+                match leveldb.put_record(&key, record) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        error!("put_record: failed to put record {} in leveldb: {}", key, e);
+                        return Ok(warp::http::Response::builder()
+                            .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                            .body(e.to_string()));
+                    }
+                }
+
                 return Ok(warp::http::Response::builder()
                     .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
                     .body(e.to_string()));
@@ -270,9 +289,109 @@ async fn remote_put(remote_url: String, value: &bytes::Bytes) -> anyhow::Result<
     }
 }
 
-async fn handle_get_record(key: String) -> Result<impl warp::Reply, warp::Rejection> {
+async fn handle_get_record(
+    leveldb: Arc<Mutex<record::LevelDb>>,
+    key: String,
+    volumes: Vec<String>,
+    replicas: usize,
+    subvolumes: u32,
+) -> Result<impl warp::Reply, warp::Rejection> {
     info!("get_record: key: {}", key);
-    Ok(warp::http::Response::builder()
-        .status(warp::http::StatusCode::FOUND)
-        .body("TODO redirect to nginx volume server".to_string()))
+    let leveldb = leveldb.lock().await;
+    let record = match leveldb.get_record_or_default(&key) {
+        Ok(record) => record,
+        Err(e) => {
+            error!(
+                "get_record: failed to get record {} from leveldb: {}",
+                key, e
+            );
+            return Ok(warp::http::Response::builder()
+                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(e.to_string()));
+        }
+    };
+
+    // TODO fallbacks
+    if record.deleted() != record::Deleted::No {
+        return Ok(warp::http::Response::builder()
+            .status(warp::http::StatusCode::NOT_FOUND)
+            .header("Content-Md5", record.hash())
+            .header("Content-Length", "0")
+            .body(String::new()));
+    }
+
+    let replicas_volumes = record::get_volume(&key, volumes, replicas, subvolumes);
+    let needs_rebalance_header = if needs_rebalance(&key, &replicas_volumes, record.read_volumes())
+    {
+        "unbalanced"
+    } else {
+        "balanced"
+    };
+
+    let remote_url: Option<String> = {
+        let mut found_remote_url = None;
+        let mut rnd = rand::rngs::StdRng::from_entropy();
+        for volume in record.read_volumes().choose(&mut rnd).into_iter() {
+            let remote_replica_volume_path = record::get_remote_path(&key);
+            let remote_url = format!("http://{}{}", volume, remote_replica_volume_path);
+            if let Ok(()) = remote_head(&remote_url).await {
+                found_remote_url = Some(remote_url);
+                break;
+            }
+        }
+        found_remote_url
+    };
+
+    return match remote_url {
+        Some(remote_url) => {
+            info!("get_record: key: {} from remote_url: {}", key, remote_url);
+            Ok(warp::http::Response::builder()
+                .header("Key-Volumes", record.read_volumes().join(","))
+                .header("Key-Balance", needs_rebalance_header)
+                .header("Content-Md5", record.hash())
+                .header("Content-Length", "0")
+                .header("Location", remote_url)
+                .status(warp::http::StatusCode::FOUND)
+                .body(String::new()))
+        }
+        None => {
+            info!("get_record: key: {} not found", key);
+            Ok(warp::http::Response::builder()
+                .header("Key-Volumes", record.read_volumes().join(","))
+                .header("Key-Balance", needs_rebalance_header)
+                .header("Content-Length", "0")
+                .status(warp::http::StatusCode::NOT_FOUND)
+                .body(String::new()))
+        }
+    };
+}
+
+fn needs_rebalance(key: &str, replicas_volumes: &[String], record_read_volumes: &[String]) -> bool {
+    if replicas_volumes.len() != record_read_volumes.len() {
+        error!("get_record: key: {} needs rebalance", key);
+        return true;
+    }
+
+    for i in 0..replicas_volumes.len() {
+        if replicas_volumes[i] != record_read_volumes[i] {
+            error!("get_record: key: {} needs rebalance", key);
+            return true;
+        }
+    }
+
+    false
+}
+
+async fn remote_head(remote_url: &str) -> anyhow::Result<()> {
+    let client = reqwest::Client::new();
+    let res = client.head(remote_url).send().await?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "remote_head: failed to head {}: {}",
+            remote_url,
+            res.status()
+        ))
+    }
 }
