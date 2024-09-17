@@ -102,6 +102,7 @@ async fn main() -> anyhow::Result<()> {
 
     let delete_record = warp::delete()
         .and(leveldb.clone())
+        .and(lock_keys.clone())
         .and(warp::path::param::<String>())
         .and(warp::path::end())
         .and_then(handle_delete_record);
@@ -434,9 +435,20 @@ async fn remote_head(remote_url: &str) -> anyhow::Result<()> {
 }
 async fn handle_delete_record(
     leveldb: Arc<Mutex<record::LevelDb>>,
+    lock_keys: Arc<Mutex<HashSet<String>>>,
     key: String,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     info!("delete_record: key: {}", key);
+    let mut lock_keys = LevelDbKeyGuard::lock(&lock_keys, key.clone()).await;
+
+    if lock_keys.guard.contains(&key) {
+        debug!("delete_record: key: {} already locked", key);
+        return Ok(warp::http::Response::builder()
+            .status(warp::http::StatusCode::CONFLICT)
+            .body(String::new()));
+    }
+
+    lock_keys.guard.insert(key.clone());
 
     // TODO get_or_default when deleting? review
     let record = match leveldb.lock().await.get_record_or_default(&key) {
