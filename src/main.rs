@@ -307,7 +307,7 @@ async fn remote_put(remote_url: String, value: &bytes::Bytes) -> anyhow::Result<
     let client = reqwest::Client::new();
     let res = client
         .put(remote_url.clone())
-        .body(value.clone())
+        .body(reqwest::Body::from(value.clone()))
         .send()
         .await?;
     if res.status().is_success() {
