@@ -2,9 +2,13 @@ use std::{collections::HashSet, net::IpAddr, path::Path, str::FromStr, sync::Arc
 
 use bytes::Bytes;
 use clap::Parser;
+use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, error};
 use rand::{seq::SliceRandom, SeedableRng};
-use tokio::sync::{RwLock, RwLockWriteGuard};
+use tokio::{
+    sync::{RwLock, RwLockWriteGuard},
+    task,
+};
 use warp::Filter;
 
 mod record;
@@ -214,7 +218,7 @@ async fn handle_put_record(
     let mut lock_keys = LevelDbKeyGuard::lock(&lock_keys, key.clone()).await;
     lock_keys.guard.insert(key.clone());
 
-    let record = match leveldb.get_record_or_default(&key) {
+    let record = match leveldb.get_record_or_default(&key).await {
         Ok(record) => record,
         Err(e) => {
             error!(
@@ -235,23 +239,32 @@ async fn handle_put_record(
 
     // TODO partNumber
     let replicas_volumes = record::get_volume(&key, volumes, replicas, subvolumes);
+    let mut futures = FuturesUnordered::new();
     for volume in replicas_volumes.clone() {
         let remote_replica_volume_path = record::get_remote_path(&key);
         let remote_url = format!("http://{}{}", volume, remote_replica_volume_path);
         // TODO is this value Bytes an efficient buffer?
         debug!("put_record key: {} remote_url: {}", key, remote_url);
-        match remote_put(&client, remote_url, &value).await {
+        let client_clone = client.clone();
+        let value_clone = value.clone();
+        futures.push(task::spawn(async move {
+            remote_put(client_clone, remote_url, value_clone).await
+        }));
+    }
+
+    while let Some(result) = futures.next().await {
+        match result {
             Ok(_) => (),
             Err(e) => {
                 error!(
-                    "put_record: failed to put record {} in remote replica volume {} with path {}: {}",
-                    key, volume, remote_replica_volume_path, e
+                    "put_record: failed to put record {} in remote replica: {}",
+                    key, e
                 );
 
                 // In case of error we want to mark the record as Deleted::Soft in the local leveldb
                 let record =
                     record::Record::new(record::Deleted::Soft, String::new(), replicas_volumes);
-                match leveldb.put_record(&key, record) {
+                match leveldb.put_record(&key, record).await {
                     Ok(_) => (),
                     Err(e) => {
                         error!("put_record: failed to put record {} in leveldb: {}", key, e);
@@ -269,13 +282,21 @@ async fn handle_put_record(
     }
 
     let value_md5_hash = if verify_checksums {
-        format!("{:x}", md5::compute(value))
+        match task::spawn_blocking(move || format!("{:x}", md5::compute(value))).await {
+            Ok(value_md5_hash) => value_md5_hash,
+            Err(e) => {
+                error!("put_record: failed to compute md5 hash for value: {}", e);
+                return Ok(warp::http::Response::builder()
+                    .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(e.to_string()));
+            }
+        }
     } else {
         String::new()
     };
 
     let record = record::Record::new(record::Deleted::No, value_md5_hash, replicas_volumes);
-    match leveldb.put_record(&key, record) {
+    match leveldb.put_record(&key, record).await {
         Ok(_) => (),
         Err(e) => {
             error!(
@@ -294,9 +315,9 @@ async fn handle_put_record(
 }
 
 async fn remote_put(
-    client: &reqwest::Client,
+    client: reqwest::Client,
     remote_url: String,
-    value: &bytes::Bytes,
+    value: bytes::Bytes,
 ) -> anyhow::Result<()> {
     let res = client
         .put(remote_url.clone())
@@ -334,7 +355,7 @@ async fn handle_get_record(
     debug!("get_record: key: {}", key);
 
     let record = {
-        match leveldb.get_record_or_default(&key) {
+        match leveldb.get_record_or_default(&key).await {
             Ok(record) => record,
             Err(e) => {
                 error!(
@@ -453,7 +474,7 @@ async fn handle_delete_record(
     let mut lock_keys = LevelDbKeyGuard::lock(&lock_keys, key.clone()).await;
     lock_keys.guard.insert(key.clone());
 
-    let record = match leveldb.get_record_or_default(&key) {
+    let record = match leveldb.get_record_or_default(&key).await {
         Ok(record) => record,
         Err(e) => {
             error!(
@@ -480,7 +501,7 @@ async fn handle_delete_record(
         record.hash().to_string(),
         record.read_volumes().to_vec(),
     );
-    match leveldb.put_record(&key, deleted_record) {
+    match leveldb.put_record(&key, deleted_record).await {
         Ok(_) => (),
         Err(e) => {
             error!(
