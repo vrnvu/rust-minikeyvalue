@@ -1,5 +1,6 @@
 use std::{collections::HashSet, net::IpAddr, path::Path, str::FromStr, sync::Arc};
 
+use ::hashring::HashRing;
 use bytes::Bytes;
 use clap::Parser;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -11,6 +12,7 @@ use tokio::{
 };
 use warp::Filter;
 
+mod hashring;
 mod record;
 
 /// minikeyvalue cli
@@ -79,10 +81,16 @@ async fn main() -> anyhow::Result<()> {
         warp::any().map(move || lock_keys.clone())
     };
 
+    let hashring = {
+        let mut ring: HashRing<String> = HashRing::new();
+        ring.batch_add(volumes);
+        ring
+    };
+
     let client = reqwest::Client::new();
     let put_record_context = PutRecordContext {
         client: client.clone(),
-        volumes: volumes.clone(),
+        hashring: hashring.clone(),
         replicas,
         subvolumes,
         verify_checksums,
@@ -97,14 +105,14 @@ async fn main() -> anyhow::Result<()> {
         .and(warp::path::end())
         .and_then(handle_put_record);
 
-    let volumes_clone = volumes.clone();
+    let hashring_clone = hashring.clone();
     let client_clone = client.clone();
     let get_record = warp::get()
         .and(warp::any().map(move || client_clone.clone()))
         .and(leveldb.clone())
         .and(warp::path::param::<String>())
         .and(warp::path::end())
-        .and(warp::any().map(move || volumes_clone.clone()))
+        .and(warp::any().map(move || hashring_clone.clone()))
         .and(warp::any().map(move || replicas))
         .and(warp::any().map(move || subvolumes))
         .and_then(handle_get_record);
@@ -114,7 +122,7 @@ async fn main() -> anyhow::Result<()> {
         .and(leveldb.clone())
         .and(warp::path::param::<String>())
         .and(warp::path::end())
-        .and(warp::any().map(move || volumes.clone()))
+        .and(warp::any().map(move || hashring.clone()))
         .and(warp::any().map(move || replicas))
         .and(warp::any().map(move || subvolumes))
         .and_then(handle_get_record);
@@ -157,7 +165,7 @@ pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, 
 #[derive(Debug, Clone)]
 struct PutRecordContext {
     client: reqwest::Client,
-    volumes: Vec<String>,
+    hashring: HashRing<String>,
     replicas: usize,
     subvolumes: u32,
     verify_checksums: bool,
@@ -191,7 +199,7 @@ async fn handle_put_record(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let PutRecordContext {
         client,
-        volumes,
+        hashring,
         replicas,
         subvolumes,
         verify_checksums,
@@ -238,7 +246,7 @@ async fn handle_put_record(
     }
 
     // TODO partNumber
-    let replicas_volumes = record::get_volume(&key, volumes, replicas, subvolumes);
+    let replicas_volumes = hashring::get_volume(&key, hashring, replicas, subvolumes);
     let mut futures = FuturesUnordered::new();
     for volume in replicas_volumes.clone() {
         let remote_replica_volume_path = record::get_remote_path(&key);
@@ -340,7 +348,7 @@ async fn handle_get_record(
     client: reqwest::Client,
     leveldb: Arc<record::LevelDb>,
     key: String,
-    volumes: Vec<String>,
+    hashring: HashRing<String>,
     replicas: usize,
     subvolumes: u32,
 ) -> Result<impl warp::Reply, warp::Rejection> {
@@ -385,7 +393,7 @@ async fn handle_get_record(
             .body(String::new()));
     }
 
-    let replicas_volumes = record::get_volume(&key, volumes, replicas, subvolumes);
+    let replicas_volumes = hashring::get_volume(&key, hashring, replicas, subvolumes);
     let needs_rebalance_header = if needs_rebalance(&replicas_volumes, record.read_volumes()) {
         "unbalanced"
     } else {
@@ -395,7 +403,7 @@ async fn handle_get_record(
     let remote_url: Option<String> = {
         let mut found_remote_url = None;
         let mut rnd = rand::rngs::StdRng::from_entropy();
-        for volume in record.read_volumes().choose(&mut rnd).into_iter() {
+        for volume in replicas_volumes.choose(&mut rnd).into_iter() {
             let remote_replica_volume_path = record::get_remote_path(&key);
             let remote_url = format!("http://{}{}", volume, remote_replica_volume_path);
             if let Ok(()) = remote_head(&client, &remote_url).await {
