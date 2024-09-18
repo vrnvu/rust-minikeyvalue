@@ -93,7 +93,7 @@ impl LevelDb {
         Ok(Self { leveldb })
     }
 
-    pub(crate) fn put_record(&self, key: &str, record: Record) -> anyhow::Result<()> {
+    pub(crate) async fn put_record(&self, key: &str, record: Record) -> anyhow::Result<()> {
         let leveldb_key = leveldb_key_from_str(key);
         let write_options = leveldb::options::WriteOptions::new();
         self.leveldb
@@ -107,7 +107,7 @@ impl LevelDb {
         Ok(())
     }
 
-    pub(crate) fn get_record_or_default(&self, key: &str) -> anyhow::Result<Record> {
+    pub(crate) async fn get_record_or_default(&self, key: &str) -> anyhow::Result<Record> {
         let read_options = leveldb::options::ReadOptions::new();
         let leveldb_key = leveldb_key_from_str(key);
 
