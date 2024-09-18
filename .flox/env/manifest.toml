@@ -14,6 +14,7 @@ leveldb.pkg-path = "leveldb"
 cmake.pkg-path = "cmake"
 nginx.pkg-path = "nginx"
 pcre.pkg-path = "pcre"
+wrk.pkg-path = "wrk"
 
 # Set environment variables in the `[vars]` section. These variables may not
 # reference one another, and are added to the environment without first
