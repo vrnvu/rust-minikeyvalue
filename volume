@@ -57,7 +57,9 @@ http {
 
       autoindex on;
       autoindex_format json;
-    }
+
+      log_not_found off;
+   }
   }
 }
 " > $CONF
