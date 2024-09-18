@@ -1,16 +1,16 @@
-use std::{collections::HashSet, net::IpAddr, path::Path, str::FromStr, sync::Arc};
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use ::hashring::HashRing;
-use bytes::Bytes;
 use clap::Parser;
-use futures::stream::{FuturesUnordered, StreamExt};
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use log::{debug, error};
 use rand::{seq::SliceRandom, SeedableRng};
+use reqwest::StatusCode;
 use tokio::{
+    signal,
     sync::{RwLock, RwLockWriteGuard},
-    task,
 };
-use warp::Filter;
 
 mod hashring;
 mod record;
@@ -52,6 +52,29 @@ struct Cli {
     subvolumes: u32,
 }
 
+struct AppPutState {
+    leveldb: Arc<record::LevelDb>,
+    lock_keys: Arc<RwLock<HashSet<String>>>,
+    client: reqwest::Client,
+    hashring: Arc<HashRing<String>>,
+    replicas: usize,
+    subvolumes: u32,
+    verify_checksums: bool,
+}
+
+struct AppGetState {
+    leveldb: Arc<record::LevelDb>,
+    client: reqwest::Client,
+    hashring: Arc<HashRing<String>>,
+    replicas: usize,
+    subvolumes: u32,
+}
+
+struct AppDeleteState {
+    leveldb: Arc<record::LevelDb>,
+    lock_keys: Arc<RwLock<HashSet<String>>>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -69,106 +92,84 @@ async fn main() -> anyhow::Result<()> {
     let replicas = cli.replicas;
     let subvolumes = cli.subvolumes;
 
-    let leveldb = {
-        let leveldb = record::LevelDb::new(leveldb_path)?;
-        let leveldb = Arc::new(leveldb);
-        warp::any().map(move || leveldb.clone())
-    };
-
-    let lock_keys = {
-        let lock_keys = RwLock::new(HashSet::<String>::new());
-        let lock_keys = Arc::new(lock_keys);
-        warp::any().map(move || lock_keys.clone())
-    };
+    let leveldb = Arc::new(record::LevelDb::new(leveldb_path)?);
+    let lock_keys = Arc::new(RwLock::new(HashSet::<String>::new()));
 
     let hashring = {
         let mut ring: HashRing<String> = HashRing::new();
         ring.batch_add(volumes);
-        ring
+        Arc::new(ring)
     };
 
     let client = reqwest::Client::new();
-    let put_record_context = PutRecordContext {
+
+    let app_put_state = Arc::new(AppPutState {
+        leveldb: leveldb.clone(),
+        lock_keys: lock_keys.clone(),
         client: client.clone(),
         hashring: hashring.clone(),
         replicas,
         subvolumes,
         verify_checksums,
-    };
-    let put_record = warp::put()
-        .and(lock_keys.clone())
-        .and(leveldb.clone())
-        .and(warp::path::param::<String>())
-        .and(warp::header::optional::<u64>("content-length"))
-        .and(warp::body::bytes())
-        .and(warp::any().map(move || put_record_context.clone()))
-        .and(warp::path::end())
-        .and_then(handle_put_record);
+    });
 
-    let hashring_clone = hashring.clone();
-    let client_clone = client.clone();
-    let get_record = warp::get()
-        .and(warp::any().map(move || client_clone.clone()))
-        .and(leveldb.clone())
-        .and(warp::path::param::<String>())
-        .and(warp::path::end())
-        .and(warp::any().map(move || hashring_clone.clone()))
-        .and(warp::any().map(move || replicas))
-        .and(warp::any().map(move || subvolumes))
-        .and_then(handle_get_record);
+    let app_get_state = Arc::new(AppGetState {
+        leveldb: leveldb.clone(),
+        client: client.clone(),
+        hashring: hashring.clone(),
+        replicas,
+        subvolumes,
+    });
 
-    let head_record = warp::head()
-        .and(warp::any().map(move || client.clone()))
-        .and(leveldb.clone())
-        .and(warp::path::param::<String>())
-        .and(warp::path::end())
-        .and(warp::any().map(move || hashring.clone()))
-        .and(warp::any().map(move || replicas))
-        .and(warp::any().map(move || subvolumes))
-        .and_then(handle_get_record);
+    let app_delete_state = Arc::new(AppDeleteState {
+        leveldb: leveldb.clone(),
+        lock_keys: lock_keys.clone(),
+    });
 
-    let delete_record = warp::delete()
-        .and(leveldb.clone())
-        .and(lock_keys.clone())
-        .and(warp::path::param::<String>())
-        .and(warp::path::end())
-        .and_then(handle_delete_record);
+    let app = axum::Router::new()
+        .route(
+            "/:key",
+            axum::routing::put(handle_put_record).with_state(app_put_state),
+        )
+        .route(
+            "/:key",
+            axum::routing::get(handle_get_record).with_state(app_get_state),
+        )
+        .route(
+            "/:key",
+            axum::routing::delete(handle_delete_record).with_state(app_delete_state),
+        );
 
-    let api = put_record
-        .or(get_record)
-        .or(head_record)
-        .or(delete_record)
-        .recover(handle_rejection);
-
-    // Listen ipv4 and ipv6
-    let addr = IpAddr::from_str("::0").unwrap();
-    warp::serve(api).run((addr, port)).await;
+    let listener = tokio::net::TcpListener::bind(format!("[::]:{}", port)).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
     Ok(())
 }
 
-pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, warp::Rejection> {
-    let message = String::new();
-    let code = {
-        if err.is_not_found() {
-            warp::http::StatusCode::NOT_FOUND
-        } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
-            warp::http::StatusCode::METHOD_NOT_ALLOWED
-        } else {
-            warp::http::StatusCode::INTERNAL_SERVER_ERROR
-        }
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
     };
 
-    Ok(warp::http::Response::builder().status(code).body(message))
-}
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
 
-#[derive(Debug, Clone)]
-struct PutRecordContext {
-    client: reqwest::Client,
-    hashring: HashRing<String>,
-    replicas: usize,
-    subvolumes: u32,
-    verify_checksums: bool,
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
 
 struct LevelDbKeyGuard<'a> {
@@ -190,72 +191,51 @@ impl<'a> Drop for LevelDbKeyGuard<'a> {
 }
 
 async fn handle_put_record(
-    lock_keys: Arc<RwLock<HashSet<String>>>,
-    leveldb: Arc<record::LevelDb>,
-    key: String,
-    content_length: Option<u64>,
-    value: Bytes,
-    put_record_context: PutRecordContext,
-) -> Result<impl warp::Reply, warp::Rejection> {
-    let PutRecordContext {
-        client,
-        hashring,
-        replicas,
-        subvolumes,
-        verify_checksums,
-    } = put_record_context;
+    axum::extract::Path(key): axum::extract::Path<String>,
+    axum::extract::State(state): axum::extract::State<Arc<AppPutState>>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> impl axum::response::IntoResponse {
+    debug!("put_record: key: {}", key);
 
-    debug!("put_record: key: {}, value: {:?}", key, value);
-    if content_length.is_none() || value.is_empty() {
-        debug!(
-            "put_record: content_length is none or value is empty for key: {}",
-            key
-        );
-        return Ok(warp::http::Response::builder()
-            .status(warp::http::StatusCode::LENGTH_REQUIRED)
-            .body("Content-Length and data can not be empty".to_string()));
+    if headers.get(axum::http::header::CONTENT_LENGTH).is_none() || body.is_empty() {
+        return StatusCode::LENGTH_REQUIRED;
     }
 
-    if lock_keys.read().await.contains(&key) {
+    if state.lock_keys.read().await.contains(&key) {
         debug!("put_record: key: {} already locked", key);
-        return Ok(warp::http::Response::builder()
-            .status(warp::http::StatusCode::CONFLICT)
-            .body(String::new()));
+        return StatusCode::CONFLICT;
     }
 
-    let mut lock_keys = LevelDbKeyGuard::lock(&lock_keys, key.clone()).await;
+    let mut lock_keys = LevelDbKeyGuard::lock(&state.lock_keys, key.clone()).await;
     lock_keys.guard.insert(key.clone());
 
-    let record = match leveldb.get_record_or_default(&key).await {
+    let record = match state.leveldb.get_record_or_default(&key).await {
         Ok(record) => record,
         Err(e) => {
             error!(
                 "put_record: failed to get record {} from leveldb: {}",
                 key, e
             );
-            return Ok(warp::http::Response::builder()
-                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string()));
+            return StatusCode::INTERNAL_SERVER_ERROR;
         }
     };
 
     if let record::Deleted::No = record.deleted() {
-        return Ok(warp::http::Response::builder()
-            .status(warp::http::StatusCode::CONFLICT)
-            .body("Forbidden to overwrite with PUT".to_string()));
+        return StatusCode::CONFLICT;
     }
 
     // TODO partNumber
-    let replicas_volumes = hashring::get_volume(&key, hashring, replicas, subvolumes);
+    let replicas_volumes =
+        hashring::get_volume(&key, &state.hashring, state.replicas, state.subvolumes);
     let mut futures = FuturesUnordered::new();
     for volume in replicas_volumes.clone() {
         let remote_replica_volume_path = record::get_remote_path(&key);
         let remote_url = format!("http://{}{}", volume, remote_replica_volume_path);
-        // TODO is this value Bytes an efficient buffer?
         debug!("put_record key: {} remote_url: {}", key, remote_url);
-        let client_clone = client.clone();
-        let value_clone = value.clone();
-        futures.push(task::spawn(async move {
+        let client_clone = state.client.clone();
+        let value_clone = body.clone();
+        futures.push(tokio::spawn(async move {
             remote_put(client_clone, remote_url, value_clone).await
         }));
     }
@@ -272,46 +252,37 @@ async fn handle_put_record(
                 // In case of error we want to mark the record as Deleted::Soft in the local leveldb
                 let record =
                     record::Record::new(record::Deleted::Soft, String::new(), replicas_volumes);
-                match leveldb.put_record(&key, record).await {
+                match state.leveldb.put_record(&key, record).await {
                     Ok(_) => (),
                     Err(e) => {
                         error!("put_record: failed to put record {} in leveldb: {}", key, e);
-                        return Ok(warp::http::Response::builder()
-                            .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                            .body(e.to_string()));
+                        return StatusCode::INTERNAL_SERVER_ERROR;
                     }
                 }
-
-                return Ok(warp::http::Response::builder()
-                    .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(e.to_string()));
+                return StatusCode::INTERNAL_SERVER_ERROR;
             }
         }
     }
 
-    let value_md5_hash = if verify_checksums {
-        format!("{:x}", md5::compute(value))
+    let value_md5_hash = if state.verify_checksums {
+        format!("{:x}", md5::compute(body))
     } else {
         String::new()
     };
 
     let record = record::Record::new(record::Deleted::No, value_md5_hash, replicas_volumes);
-    match leveldb.put_record(&key, record).await {
+    match state.leveldb.put_record(&key, record).await {
         Ok(_) => (),
         Err(e) => {
             error!(
                 "put_record: failed to put record with value_md5_hash {} in leveldb: {}",
                 key, e
             );
-            return Ok(warp::http::Response::builder()
-                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string()));
+            return StatusCode::INTERNAL_SERVER_ERROR;
         }
     }
 
-    Ok(warp::http::Response::builder()
-        .status(warp::http::StatusCode::CREATED)
-        .body(String::new()))
+    StatusCode::CREATED
 }
 
 async fn remote_put(
@@ -319,14 +290,10 @@ async fn remote_put(
     remote_url: String,
     value: bytes::Bytes,
 ) -> anyhow::Result<()> {
-    let res = client
-        .put(remote_url.clone())
-        .body(value.clone())
-        .send()
-        .await?;
+    let res = client.put(remote_url.clone()).body(value).send().await?;
     if res.status().is_success() {
-        if res.status().as_u16() != warp::http::StatusCode::CREATED.as_u16()
-            && res.status().as_u16() != warp::http::StatusCode::NO_CONTENT.as_u16()
+        if res.status().as_u16() != axum::http::StatusCode::CREATED.as_u16()
+            && res.status().as_u16() != axum::http::StatusCode::NO_CONTENT.as_u16()
         {
             return Err(anyhow::anyhow!(
                 "remote_put: invalid status code: {} for url: {}",
@@ -345,36 +312,34 @@ async fn remote_put(
 }
 
 async fn handle_get_record(
-    client: reqwest::Client,
-    leveldb: Arc<record::LevelDb>,
-    key: String,
-    hashring: HashRing<String>,
-    replicas: usize,
-    subvolumes: u32,
-) -> Result<impl warp::Reply, warp::Rejection> {
+    axum::extract::Path(key): axum::extract::Path<String>,
+    axum::extract::State(state): axum::extract::State<Arc<AppGetState>>,
+) -> axum::response::Response {
     debug!("get_record: key: {}", key);
 
     let record = {
-        match leveldb.get_record(&key).await {
+        match state.leveldb.get_record(&key).await {
             Ok(record) => record,
             Err(e) => {
                 error!(
                     "get_record: failed to get record {} from leveldb: {}",
                     key, e
                 );
-                return Ok(warp::http::Response::builder()
-                    .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(e.to_string()));
+                return axum::http::Response::builder()
+                    .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(axum::body::Body::empty())
+                    .unwrap();
             }
         }
     };
 
     if record.is_none() {
-        return Ok(warp::http::Response::builder()
-            .status(warp::http::StatusCode::NOT_FOUND)
+        return axum::http::Response::builder()
+            .status(axum::http::StatusCode::NOT_FOUND)
+            .header(axum::http::header::CONTENT_LENGTH, "0")
             .header("Content-Md5", "")
-            .header("Content-Length", "0")
-            .body(String::new()));
+            .body(axum::body::Body::empty())
+            .unwrap();
     }
 
     let record = record.unwrap();
@@ -386,14 +351,16 @@ async fn handle_get_record(
             key,
             record.deleted()
         );
-        return Ok(warp::http::Response::builder()
-            .status(warp::http::StatusCode::NOT_FOUND)
-            .header("Content-Md5", record.hash())
-            .header("Content-Length", "0")
-            .body(String::new()));
+        return axum::http::Response::builder()
+            .status(axum::http::StatusCode::NOT_FOUND)
+            .header(axum::http::header::CONTENT_LENGTH, "0")
+            .header("Content-Md5", record.hash().to_string())
+            .body(axum::body::Body::empty())
+            .unwrap();
     }
 
-    let replicas_volumes = hashring::get_volume(&key, hashring, replicas, subvolumes);
+    let replicas_volumes =
+        hashring::get_volume(&key, &state.hashring, state.replicas, state.subvolumes);
     let needs_rebalance_header = if needs_rebalance(&replicas_volumes, record.read_volumes()) {
         "unbalanced"
     } else {
@@ -406,7 +373,7 @@ async fn handle_get_record(
         for volume in replicas_volumes.choose(&mut rnd).into_iter() {
             let remote_replica_volume_path = record::get_remote_path(&key);
             let remote_url = format!("http://{}{}", volume, remote_replica_volume_path);
-            if let Ok(()) = remote_head(&client, &remote_url).await {
+            if let Ok(()) = remote_head(&state.client, &remote_url).await {
                 found_remote_url = Some(remote_url);
                 break;
             }
@@ -414,28 +381,28 @@ async fn handle_get_record(
         found_remote_url
     };
 
-    return match remote_url {
+    match remote_url {
         Some(remote_url) => {
             debug!("get_record: key: {} from remote_url: {}", key, remote_url);
-            Ok(warp::http::Response::builder()
-                .header("Key-Volumes", record.read_volumes().join(","))
-                .header("Key-Balance", needs_rebalance_header)
-                .header("Content-Md5", record.hash())
-                .header("Content-Length", "0")
-                .header("Location", remote_url)
-                .status(warp::http::StatusCode::FOUND)
-                .body(String::new()))
+            axum::http::Response::builder()
+                .status(axum::http::StatusCode::FOUND)
+                .header(axum::http::header::LOCATION, remote_url)
+                .header(axum::http::header::CONTENT_LENGTH, "0")
+                .header("Content-Md5", record.hash().to_string())
+                .body(axum::body::Body::empty())
+                .unwrap()
         }
         None => {
             debug!("get_record: key: {} not found in any volume", key);
-            Ok(warp::http::Response::builder()
+            axum::http::Response::builder()
+                .status(axum::http::StatusCode::GONE)
+                .header(axum::http::header::CONTENT_LENGTH, "0")
                 .header("Key-Volumes", record.read_volumes().join(","))
                 .header("Key-Balance", needs_rebalance_header)
-                .header("Content-Length", "0")
-                .status(warp::http::StatusCode::GONE)
-                .body(String::new()))
+                .body(axum::body::Body::empty())
+                .unwrap()
         }
-    };
+    }
 }
 
 fn needs_rebalance(replicas_volumes: &[String], record_read_volumes: &[String]) -> bool {
@@ -455,32 +422,33 @@ async fn remote_head(client: &reqwest::Client, remote_url: &str) -> anyhow::Resu
     }
 }
 async fn handle_delete_record(
-    leveldb: Arc<record::LevelDb>,
-    lock_keys: Arc<RwLock<HashSet<String>>>,
-    key: String,
-) -> Result<impl warp::Reply, warp::Rejection> {
+    axum::extract::Path(key): axum::extract::Path<String>,
+    axum::extract::State(state): axum::extract::State<Arc<AppDeleteState>>,
+) -> axum::response::Response {
     debug!("delete_record: key: {}", key);
 
-    if lock_keys.read().await.contains(&key) {
+    if state.lock_keys.read().await.contains(&key) {
         debug!("delete_record: key: {} already locked", key);
-        return Ok(warp::http::Response::builder()
-            .status(warp::http::StatusCode::CONFLICT)
-            .body(String::new()));
+        return axum::http::Response::builder()
+            .status(axum::http::StatusCode::CONFLICT)
+            .body(axum::body::Body::empty())
+            .unwrap();
     }
 
-    let mut lock_keys = LevelDbKeyGuard::lock(&lock_keys, key.clone()).await;
+    let mut lock_keys = LevelDbKeyGuard::lock(&state.lock_keys, key.clone()).await;
     lock_keys.guard.insert(key.clone());
 
-    let record = match leveldb.get_record_or_default(&key).await {
+    let record = match state.leveldb.get_record_or_default(&key).await {
         Ok(record) => record,
         Err(e) => {
             error!(
                 "delete_record: failed to get record {} from leveldb: {}",
                 key, e
             );
-            return Ok(warp::http::Response::builder()
-                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string()));
+            return axum::http::Response::builder()
+                .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(axum::body::Body::empty())
+                .unwrap();
         }
     };
 
@@ -488,9 +456,10 @@ async fn handle_delete_record(
     // This probalby will make some tests fail with link/unlink
     if record.deleted() == record::Deleted::Hard || record.deleted() == record::Deleted::Soft {
         debug!("delete_record: key: {} already deleted", key);
-        return Ok(warp::http::Response::builder()
-            .status(warp::http::StatusCode::NOT_FOUND)
-            .body(String::new()));
+        return axum::http::Response::builder()
+            .status(axum::http::StatusCode::NOT_FOUND)
+            .body(axum::body::Body::empty())
+            .unwrap();
     }
 
     let deleted_record = record::Record::new(
@@ -498,22 +467,24 @@ async fn handle_delete_record(
         record.hash().to_string(),
         record.read_volumes().to_vec(),
     );
-    match leveldb.put_record(&key, deleted_record).await {
+    match state.leveldb.put_record(&key, deleted_record).await {
         Ok(_) => (),
         Err(e) => {
             error!(
                 "delete_record: failed to put deleted record {} in leveldb: {}",
                 key, e
             );
-            return Ok(warp::http::Response::builder()
-                .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string()));
+            return axum::http::Response::builder()
+                .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(axum::body::Body::empty())
+                .unwrap();
         }
     }
 
     // TODO unlink
 
-    Ok(warp::http::Response::builder()
-        .status(warp::http::StatusCode::NO_CONTENT)
-        .body(String::new()))
+    axum::http::Response::builder()
+        .status(axum::http::StatusCode::NO_CONTENT)
+        .body(axum::body::Body::empty())
+        .unwrap()
 }

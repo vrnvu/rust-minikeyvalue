@@ -5,7 +5,7 @@ use hashring::HashRing;
 /// `subvolumes`: The number of subvolumes, i.e., disks per machine. Default is 10.
 pub fn get_volume(
     key: &str,
-    hashring: HashRing<String>,
+    hashring: &HashRing<String>,
     replicas: usize,
     subvolumes: u32,
 ) -> Vec<String> {
@@ -88,7 +88,7 @@ mod tests {
         ]);
 
         let key = "1";
-        let volumes = get_volume(key, ring, 3, 10);
+        let volumes = get_volume(key, &ring, 3, 10);
         assert_eq!(volumes[0], "foo/sv00");
         assert_eq!(volumes[1], "wow/sv05");
         assert_eq!(volumes[2], "bar/sv02");
