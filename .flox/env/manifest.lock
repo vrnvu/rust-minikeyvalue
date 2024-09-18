@@ -6,6 +6,9 @@
       "cmake": {
         "pkg-path": "cmake"
       },
+      "heaptrack": {
+        "pkg-path": "heaptrack"
+      },
       "leveldb": {
         "pkg-path": "leveldb"
       },
@@ -17,6 +20,9 @@
       },
       "python3": {
         "pkg-path": "python3"
+      },
+      "samply": {
+        "pkg-path": "samply"
       },
       "snappy": {
         "pkg-path": "snappy"
@@ -162,6 +168,122 @@
       "outputs": {
         "debug": "/nix/store/rjyfyyrfshs95b5mj6spr0ywgkiajidw-cmake-3.29.6-debug",
         "out": "/nix/store/yzi080r2c1zn2jzrhcfdv7dmr92yw07l-cmake-3.29.6"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "heaptrack",
+      "broken": false,
+      "derivation": "/nix/store/49h2vj1dg6x64fygpdr03l8d6n2hh435-heaptrack-1.5.0.drv",
+      "description": "Heap memory profiler for Linux",
+      "install_id": "heaptrack",
+      "license": "LGPL-2.1-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "heaptrack-1.5.0",
+      "pname": "heaptrack",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.5.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/rn03l4s6vsp343wk5prka95ln77wfqmn-heaptrack-1.5.0"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "heaptrack",
+      "broken": false,
+      "derivation": "/nix/store/43d11jlsk7gvw5fixsfbcqrjniqk53yk-heaptrack-1.5.0.drv",
+      "description": "Heap memory profiler for Linux",
+      "install_id": "heaptrack",
+      "license": "LGPL-2.1-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "heaptrack-1.5.0",
+      "pname": "heaptrack",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.5.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/dp17rn0bvbdg1m20xiyh7f2kbwhnps49-heaptrack-1.5.0"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "heaptrack",
+      "broken": false,
+      "derivation": "/nix/store/dfv2cxcc95x80cm4mi3pfm92hv25fs45-heaptrack-1.5.0.drv",
+      "description": "Heap memory profiler for Linux",
+      "install_id": "heaptrack",
+      "license": "LGPL-2.1-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "heaptrack-1.5.0",
+      "pname": "heaptrack",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.5.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/3bn79kjbxb1spj1s6hq165m3ig14y8x3-heaptrack-1.5.0"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "heaptrack",
+      "broken": false,
+      "derivation": "/nix/store/wic5yy4c56xj1pb7l0xyj34b65li8cy7-heaptrack-1.5.0.drv",
+      "description": "Heap memory profiler for Linux",
+      "install_id": "heaptrack",
+      "license": "LGPL-2.1-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "heaptrack-1.5.0",
+      "pname": "heaptrack",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.5.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/bgyh1bardqgwkv8aidy3a7dxvx4gpqc5-heaptrack-1.5.0"
       },
       "system": "x86_64-linux",
       "group": "toplevel",
@@ -656,6 +778,122 @@
       "outputs": {
         "debug": "/nix/store/0a39pi2s6kxqc3kjjz2y9yzibd62zhhb-python3-3.12.5-debug",
         "out": "/nix/store/h3i0acpmr8mrjx07519xxmidv8mpax4y-python3-3.12.5"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "samply",
+      "broken": false,
+      "derivation": "/nix/store/85fw64n7f9538vp4pwjxb6j74p4akmcb-samply-0.12.0.drv",
+      "description": "Command line profiler for macOS and Linux",
+      "install_id": "samply",
+      "license": "[ Apache-2.0, MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "samply-0.12.0",
+      "pname": "samply",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.12.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/xhwf6nd4za1kw4js5mqaycs0kp9lfvwy-samply-0.12.0"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "samply",
+      "broken": false,
+      "derivation": "/nix/store/fkc4iqiw0xnjwnwblibd39aga0b0aw75-samply-0.12.0.drv",
+      "description": "Command line profiler for macOS and Linux",
+      "install_id": "samply",
+      "license": "[ Apache-2.0, MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "samply-0.12.0",
+      "pname": "samply",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.12.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/qv4v3v2j236pd43hrzspyx0nx7plg9ra-samply-0.12.0"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "samply",
+      "broken": false,
+      "derivation": "/nix/store/3pscgj31cpyiycalyw3f7lmf8q5fadg8-samply-0.12.0.drv",
+      "description": "Command line profiler for macOS and Linux",
+      "install_id": "samply",
+      "license": "[ Apache-2.0, MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "samply-0.12.0",
+      "pname": "samply",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.12.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/igvxmrlrmnl0nk5s7a611glgkd1cvv96-samply-0.12.0"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "samply",
+      "broken": false,
+      "derivation": "/nix/store/mbzmah27ghi4ck2396ccww0i6jv1g4z3-samply-0.12.0.drv",
+      "description": "Command line profiler for macOS and Linux",
+      "install_id": "samply",
+      "license": "[ Apache-2.0, MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "samply-0.12.0",
+      "pname": "samply",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.12.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/jk80l6awzv2f3nzvpfiv8cdbhgrgsdx5-samply-0.12.0"
       },
       "system": "x86_64-linux",
       "group": "toplevel",
