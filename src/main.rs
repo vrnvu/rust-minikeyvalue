@@ -4,7 +4,7 @@ use bytes::Bytes;
 use clap::Parser;
 use log::{debug, error};
 use rand::{seq::SliceRandom, SeedableRng};
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::{RwLock, RwLockWriteGuard};
 use warp::Filter;
 
 mod record;
@@ -65,13 +65,13 @@ async fn main() -> anyhow::Result<()> {
 
     let leveldb = {
         let leveldb = record::LevelDb::new(leveldb_path)?;
-        let leveldb = Arc::new(Mutex::new(leveldb));
+        let leveldb = Arc::new(leveldb);
         warp::any().map(move || leveldb.clone())
     };
 
     let lock_keys = {
-        let lock_keys = HashSet::<String>::new();
-        let lock_keys = Arc::new(Mutex::new(lock_keys));
+        let lock_keys = RwLock::new(HashSet::<String>::new());
+        let lock_keys = Arc::new(lock_keys);
         warp::any().map(move || lock_keys.clone())
     };
 
@@ -160,13 +160,13 @@ struct PutRecordContext {
 }
 
 struct LevelDbKeyGuard<'a> {
-    guard: MutexGuard<'a, HashSet<String>>,
+    guard: RwLockWriteGuard<'a, HashSet<String>>,
     key: String,
 }
 
 impl<'a> LevelDbKeyGuard<'a> {
-    async fn lock(lock_keys: &'a Mutex<HashSet<String>>, key: String) -> Self {
-        let guard = lock_keys.lock().await;
+    async fn lock(lock_keys: &'a RwLock<HashSet<String>>, key: String) -> Self {
+        let guard = lock_keys.write().await;
         Self { guard, key }
     }
 }
@@ -178,8 +178,8 @@ impl<'a> Drop for LevelDbKeyGuard<'a> {
 }
 
 async fn handle_put_record(
-    lock_keys: Arc<Mutex<HashSet<String>>>,
-    leveldb: Arc<Mutex<record::LevelDb>>,
+    lock_keys: Arc<RwLock<HashSet<String>>>,
+    leveldb: Arc<record::LevelDb>,
     key: String,
     content_length: Option<u64>,
     value: Bytes,
@@ -204,18 +204,17 @@ async fn handle_put_record(
             .body("Content-Length and data can not be empty".to_string()));
     }
 
-    let mut lock_keys = LevelDbKeyGuard::lock(&lock_keys, key.clone()).await;
-
-    if lock_keys.guard.contains(&key) {
+    if lock_keys.read().await.contains(&key) {
         debug!("put_record: key: {} already locked", key);
         return Ok(warp::http::Response::builder()
             .status(warp::http::StatusCode::CONFLICT)
             .body(String::new()));
     }
 
+    let mut lock_keys = LevelDbKeyGuard::lock(&lock_keys, key.clone()).await;
     lock_keys.guard.insert(key.clone());
 
-    let record = match leveldb.lock().await.get_record_or_default(&key) {
+    let record = match leveldb.get_record_or_default(&key) {
         Ok(record) => record,
         Err(e) => {
             error!(
@@ -252,7 +251,7 @@ async fn handle_put_record(
                 // In case of error we want to mark the record as Deleted::Soft in the local leveldb
                 let record =
                     record::Record::new(record::Deleted::Soft, String::new(), replicas_volumes);
-                match leveldb.lock().await.put_record(&key, record) {
+                match leveldb.put_record(&key, record) {
                     Ok(_) => (),
                     Err(e) => {
                         error!("put_record: failed to put record {} in leveldb: {}", key, e);
@@ -276,7 +275,7 @@ async fn handle_put_record(
     };
 
     let record = record::Record::new(record::Deleted::No, value_md5_hash, replicas_volumes);
-    match leveldb.lock().await.put_record(&key, record) {
+    match leveldb.put_record(&key, record) {
         Ok(_) => (),
         Err(e) => {
             error!(
@@ -326,7 +325,7 @@ async fn remote_put(
 
 async fn handle_get_record(
     client: reqwest::Client,
-    leveldb: Arc<Mutex<record::LevelDb>>,
+    leveldb: Arc<record::LevelDb>,
     key: String,
     volumes: Vec<String>,
     replicas: usize,
@@ -335,7 +334,6 @@ async fn handle_get_record(
     debug!("get_record: key: {}", key);
 
     let record = {
-        let leveldb = leveldb.lock().await;
         match leveldb.get_record_or_default(&key) {
             Ok(record) => record,
             Err(e) => {
@@ -439,23 +437,23 @@ async fn remote_head(client: &reqwest::Client, remote_url: &str) -> anyhow::Resu
     }
 }
 async fn handle_delete_record(
-    leveldb: Arc<Mutex<record::LevelDb>>,
-    lock_keys: Arc<Mutex<HashSet<String>>>,
+    leveldb: Arc<record::LevelDb>,
+    lock_keys: Arc<RwLock<HashSet<String>>>,
     key: String,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     debug!("delete_record: key: {}", key);
-    let mut lock_keys = LevelDbKeyGuard::lock(&lock_keys, key.clone()).await;
 
-    if lock_keys.guard.contains(&key) {
+    if lock_keys.read().await.contains(&key) {
         debug!("delete_record: key: {} already locked", key);
         return Ok(warp::http::Response::builder()
             .status(warp::http::StatusCode::CONFLICT)
             .body(String::new()));
     }
 
+    let mut lock_keys = LevelDbKeyGuard::lock(&lock_keys, key.clone()).await;
     lock_keys.guard.insert(key.clone());
 
-    let record = match leveldb.lock().await.get_record_or_default(&key) {
+    let record = match leveldb.get_record_or_default(&key) {
         Ok(record) => record,
         Err(e) => {
             error!(
@@ -482,7 +480,7 @@ async fn handle_delete_record(
         record.hash().to_string(),
         record.read_volumes().to_vec(),
     );
-    match leveldb.lock().await.put_record(&key, deleted_record) {
+    match leveldb.put_record(&key, deleted_record) {
         Ok(_) => (),
         Err(e) => {
             error!(

@@ -99,7 +99,7 @@ func main() {
 		}()
 	}
 
-	count := 1_000
+	count := 20_000
 
 	start := time.Now()
 	for i := 0; i < count; i++ {
