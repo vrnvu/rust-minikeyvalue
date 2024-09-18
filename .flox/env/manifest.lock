@@ -20,6 +20,9 @@
       },
       "snappy": {
         "pkg-path": "snappy"
+      },
+      "wrk": {
+        "pkg-path": "wrk"
       }
     },
     "vars": {},
@@ -773,6 +776,122 @@
       "outputs": {
         "dev": "/nix/store/svc9y9kkffdlxd65mq3710vcm2bybxa9-snappy-1.2.1-dev",
         "out": "/nix/store/y6miv1y5wkgv06zsywki79waz1r0jlk0-snappy-1.2.1"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "wrk",
+      "broken": false,
+      "derivation": "/nix/store/askmljcs9w662xy1skb682zmwkx0j7b6-wrk-4.2.0.drv",
+      "description": "HTTP benchmarking tool",
+      "install_id": "wrk",
+      "license": "Apache-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "wrk-4.2.0",
+      "pname": "wrk",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.2.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/qbwcpjmi6gmbkh8vvs7s4qww6vk7infs-wrk-4.2.0"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "wrk",
+      "broken": false,
+      "derivation": "/nix/store/snli05k4r1c8xrzvd5jslhs5kskknnqf-wrk-4.2.0.drv",
+      "description": "HTTP benchmarking tool",
+      "install_id": "wrk",
+      "license": "Apache-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "wrk-4.2.0",
+      "pname": "wrk",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.2.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/lrya78ksy5zkdy33qdq7xpgnkxfk6gvj-wrk-4.2.0"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "wrk",
+      "broken": false,
+      "derivation": "/nix/store/r4x4jala8s9bmb2fk25rx38qblykcz29-wrk-4.2.0.drv",
+      "description": "HTTP benchmarking tool",
+      "install_id": "wrk",
+      "license": "Apache-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "wrk-4.2.0",
+      "pname": "wrk",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.2.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/c5ja4h7xj6h11rsr1kacz0lc6j71xwx1-wrk-4.2.0"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "wrk",
+      "broken": false,
+      "derivation": "/nix/store/jqvpicmlq76knab2h03hcqr8j0krbvz0-wrk-4.2.0.drv",
+      "description": "HTTP benchmarking tool",
+      "install_id": "wrk",
+      "license": "Apache-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "wrk-4.2.0",
+      "pname": "wrk",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.2.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/8v5fwk7q247lxngj68ngpjgb4s1r3jqb-wrk-4.2.0"
       },
       "system": "x86_64-linux",
       "group": "toplevel",

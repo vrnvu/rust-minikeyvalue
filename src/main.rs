@@ -2,7 +2,7 @@ use std::{collections::HashSet, net::IpAddr, path::Path, str::FromStr, sync::Arc
 
 use bytes::Bytes;
 use clap::Parser;
-use log::{debug, error, info};
+use log::{debug, error};
 use rand::{seq::SliceRandom, SeedableRng};
 use tokio::sync::{Mutex, MutexGuard};
 use warp::Filter;
@@ -75,7 +75,9 @@ async fn main() -> anyhow::Result<()> {
         warp::any().map(move || lock_keys.clone())
     };
 
+    let client = reqwest::Client::new();
     let put_record_context = PutRecordContext {
+        client: client.clone(),
         volumes: volumes.clone(),
         replicas,
         subvolumes,
@@ -92,7 +94,9 @@ async fn main() -> anyhow::Result<()> {
         .and_then(handle_put_record);
 
     let volumes_clone = volumes.clone();
+    let client_clone = client.clone();
     let get_record = warp::get()
+        .and(warp::any().map(move || client_clone.clone()))
         .and(leveldb.clone())
         .and(warp::path::param::<String>())
         .and(warp::path::end())
@@ -102,6 +106,7 @@ async fn main() -> anyhow::Result<()> {
         .and_then(handle_get_record);
 
     let head_record = warp::head()
+        .and(warp::any().map(move || client.clone()))
         .and(leveldb.clone())
         .and(warp::path::param::<String>())
         .and(warp::path::end())
@@ -147,6 +152,7 @@ pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, 
 
 #[derive(Debug, Clone)]
 struct PutRecordContext {
+    client: reqwest::Client,
     volumes: Vec<String>,
     replicas: usize,
     subvolumes: u32,
@@ -180,13 +186,14 @@ async fn handle_put_record(
     put_record_context: PutRecordContext,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let PutRecordContext {
+        client,
         volumes,
         replicas,
         subvolumes,
         verify_checksums,
     } = put_record_context;
 
-    info!("put_record: key: {}, value: {:?}", key, value);
+    debug!("put_record: key: {}, value: {:?}", key, value);
     if content_length.is_none() || value.is_empty() {
         debug!(
             "put_record: content_length is none or value is empty for key: {}",
@@ -233,8 +240,8 @@ async fn handle_put_record(
         let remote_replica_volume_path = record::get_remote_path(&key);
         let remote_url = format!("http://{}{}", volume, remote_replica_volume_path);
         // TODO is this value Bytes an efficient buffer?
-        info!("put_record key: {} remote_url: {}", key, remote_url);
-        match remote_put(remote_url, &value).await {
+        debug!("put_record key: {} remote_url: {}", key, remote_url);
+        match remote_put(&client, remote_url, &value).await {
             Ok(_) => (),
             Err(e) => {
                 error!(
@@ -287,8 +294,11 @@ async fn handle_put_record(
         .body(String::new()))
 }
 
-async fn remote_put(remote_url: String, value: &bytes::Bytes) -> anyhow::Result<()> {
-    let client = reqwest::Client::new();
+async fn remote_put(
+    client: &reqwest::Client,
+    remote_url: String,
+    value: &bytes::Bytes,
+) -> anyhow::Result<()> {
     let res = client
         .put(remote_url.clone())
         .body(value.clone())
@@ -315,13 +325,14 @@ async fn remote_put(remote_url: String, value: &bytes::Bytes) -> anyhow::Result<
 }
 
 async fn handle_get_record(
+    client: reqwest::Client,
     leveldb: Arc<Mutex<record::LevelDb>>,
     key: String,
     volumes: Vec<String>,
     replicas: usize,
     subvolumes: u32,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    info!("get_record: key: {}", key);
+    debug!("get_record: key: {}", key);
 
     let record = {
         let leveldb = leveldb.lock().await;
@@ -341,7 +352,7 @@ async fn handle_get_record(
 
     // TODO fallbacks
     if record.deleted() != record::Deleted::No {
-        info!(
+        debug!(
             "get_record: key: {} not found, record deleted: {:?}",
             key,
             record.deleted()
@@ -367,7 +378,7 @@ async fn handle_get_record(
         for volume in record.read_volumes().choose(&mut rnd).into_iter() {
             let remote_replica_volume_path = record::get_remote_path(&key);
             let remote_url = format!("http://{}{}", volume, remote_replica_volume_path);
-            if let Ok(()) = remote_head(&remote_url).await {
+            if let Ok(()) = remote_head(&client, &remote_url).await {
                 found_remote_url = Some(remote_url);
                 break;
             }
@@ -377,7 +388,7 @@ async fn handle_get_record(
 
     return match remote_url {
         Some(remote_url) => {
-            info!("get_record: key: {} from remote_url: {}", key, remote_url);
+            debug!("get_record: key: {} from remote_url: {}", key, remote_url);
             Ok(warp::http::Response::builder()
                 .header("Key-Volumes", record.read_volumes().join(","))
                 .header("Key-Balance", needs_rebalance_header)
@@ -388,7 +399,7 @@ async fn handle_get_record(
                 .body(String::new()))
         }
         None => {
-            info!("get_record: key: {} not found in any volume", key);
+            debug!("get_record: key: {} not found in any volume", key);
             Ok(warp::http::Response::builder()
                 .header("Key-Volumes", record.read_volumes().join(","))
                 .header("Key-Balance", needs_rebalance_header)
@@ -415,8 +426,7 @@ fn needs_rebalance(key: &str, replicas_volumes: &[String], record_read_volumes: 
     false
 }
 
-async fn remote_head(remote_url: &str) -> anyhow::Result<()> {
-    let client = reqwest::Client::new();
+async fn remote_head(client: &reqwest::Client, remote_url: &str) -> anyhow::Result<()> {
     let res = client.head(remote_url).send().await?;
     if res.status().is_success() {
         Ok(())
@@ -433,7 +443,7 @@ async fn handle_delete_record(
     lock_keys: Arc<Mutex<HashSet<String>>>,
     key: String,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    info!("delete_record: key: {}", key);
+    debug!("delete_record: key: {}", key);
     let mut lock_keys = LevelDbKeyGuard::lock(&lock_keys, key.clone()).await;
 
     if lock_keys.guard.contains(&key) {
