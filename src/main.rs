@@ -363,8 +363,7 @@ async fn handle_get_record(
     }
 
     let replicas_volumes = record::get_volume(&key, volumes, replicas, subvolumes);
-    let needs_rebalance_header = if needs_rebalance(&key, &replicas_volumes, record.read_volumes())
-    {
+    let needs_rebalance_header = if needs_rebalance(&replicas_volumes, record.read_volumes()) {
         "unbalanced"
     } else {
         "balanced"
@@ -408,20 +407,8 @@ async fn handle_get_record(
     };
 }
 
-fn needs_rebalance(key: &str, replicas_volumes: &[String], record_read_volumes: &[String]) -> bool {
-    if replicas_volumes.len() != record_read_volumes.len() {
-        error!("get_record: key: {} needs rebalance", key);
-        return true;
-    }
-
-    for i in 0..replicas_volumes.len() {
-        if replicas_volumes[i] != record_read_volumes[i] {
-            error!("get_record: key: {} needs rebalance", key);
-            return true;
-        }
-    }
-
-    false
+fn needs_rebalance(replicas_volumes: &[String], record_read_volumes: &[String]) -> bool {
+    replicas_volumes.len() != record_read_volumes.len()
 }
 
 async fn remote_head(client: &reqwest::Client, remote_url: &str) -> anyhow::Result<()> {
