@@ -59,17 +59,6 @@ impl Default for Record {
     }
 }
 
-impl TryFrom<Option<Vec<u8>>> for Record {
-    type Error = anyhow::Error;
-
-    fn try_from(value: Option<Vec<u8>>) -> anyhow::Result<Self> {
-        match value {
-            Some(data) => Self::from_bytes(&data),
-            None => Ok(Record::default()),
-        }
-    }
-}
-
 pub(crate) type LevelDbKey = i32;
 
 pub(crate) fn leveldb_key_from_str(key: &str) -> LevelDbKey {
@@ -107,7 +96,7 @@ impl LevelDb {
         Ok(())
     }
 
-    pub(crate) async fn get_record_or_default(&self, key: &str) -> anyhow::Result<Record> {
+    pub(crate) async fn get_record(&self, key: &str) -> anyhow::Result<Option<Record>> {
         let read_options = leveldb::options::ReadOptions::new();
         let leveldb_key = leveldb_key_from_str(key);
 
@@ -116,9 +105,16 @@ impl LevelDb {
             .get(read_options, leveldb_key)
             .with_context(|| format!("Failed to get key {} from LevelDB", key))?;
 
-        record
-            .try_into()
-            .with_context(|| format!("Failed to deserialize record for key {}", key))
+        if let Some(record) = record {
+            Ok(Some(Record::from_bytes(&record)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub(crate) async fn get_record_or_default(&self, key: &str) -> anyhow::Result<Record> {
+        let record = self.get_record(key).await?;
+        Ok(record.unwrap_or(Record::default()))
     }
 }
 
@@ -226,16 +222,6 @@ mod tests {
             read_volumes: Vec::new(),
         };
         assert_eq!(record, expected_record);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_record_try_from_none() -> anyhow::Result<()> {
-        let record: Option<Vec<u8>> = None;
-        let deserialized_record: Record = record.try_into()?;
-        let expected_record = Record::default();
-        assert_eq!(deserialized_record, expected_record);
 
         Ok(())
     }

@@ -17,6 +17,7 @@ pcre.pkg-path = "pcre"
 wrk.pkg-path = "wrk"
 heaptrack.pkg-path = "heaptrack"
 samply.pkg-path = "samply"
+tokio-console.pkg-path = "tokio-console"
 
 # Set environment variables in the `[vars]` section. These variables may not
 # reference one another, and are added to the environment without first

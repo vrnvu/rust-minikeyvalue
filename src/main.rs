@@ -282,15 +282,7 @@ async fn handle_put_record(
     }
 
     let value_md5_hash = if verify_checksums {
-        match task::spawn_blocking(move || format!("{:x}", md5::compute(value))).await {
-            Ok(value_md5_hash) => value_md5_hash,
-            Err(e) => {
-                error!("put_record: failed to compute md5 hash for value: {}", e);
-                return Ok(warp::http::Response::builder()
-                    .status(warp::http::StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(e.to_string()));
-            }
-        }
+        format!("{:x}", md5::compute(value))
     } else {
         String::new()
     };
@@ -355,7 +347,7 @@ async fn handle_get_record(
     debug!("get_record: key: {}", key);
 
     let record = {
-        match leveldb.get_record_or_default(&key).await {
+        match leveldb.get_record(&key).await {
             Ok(record) => record,
             Err(e) => {
                 error!(
@@ -368,6 +360,16 @@ async fn handle_get_record(
             }
         }
     };
+
+    if record.is_none() {
+        return Ok(warp::http::Response::builder()
+            .status(warp::http::StatusCode::NOT_FOUND)
+            .header("Content-Md5", "")
+            .header("Content-Length", "0")
+            .body(String::new()));
+    }
+
+    let record = record.unwrap();
 
     // TODO fallbacks
     if record.deleted() != record::Deleted::No {

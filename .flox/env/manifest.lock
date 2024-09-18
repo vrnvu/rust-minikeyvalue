@@ -27,6 +27,9 @@
       "snappy": {
         "pkg-path": "snappy"
       },
+      "tokio-console": {
+        "pkg-path": "tokio-console"
+      },
       "wrk": {
         "pkg-path": "wrk"
       }
@@ -1014,6 +1017,122 @@
       "outputs": {
         "dev": "/nix/store/svc9y9kkffdlxd65mq3710vcm2bybxa9-snappy-1.2.1-dev",
         "out": "/nix/store/y6miv1y5wkgv06zsywki79waz1r0jlk0-snappy-1.2.1"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "tokio-console",
+      "broken": false,
+      "derivation": "/nix/store/kknw8d0sm0yinsyss7hq711ld90pigdg-tokio-console-0.1.10.drv",
+      "description": "Debugger for asynchronous Rust code",
+      "install_id": "tokio-console",
+      "license": "[ MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "tokio-console-0.1.10",
+      "pname": "tokio-console",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.1.10",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/4day5ks7a1ap4b03240f8z5nzv6b2841-tokio-console-0.1.10"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "tokio-console",
+      "broken": false,
+      "derivation": "/nix/store/qqkharydwy1yhb2f3vghywi3kd3wrcqj-tokio-console-0.1.10.drv",
+      "description": "Debugger for asynchronous Rust code",
+      "install_id": "tokio-console",
+      "license": "[ MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "tokio-console-0.1.10",
+      "pname": "tokio-console",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.1.10",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/4nainrg91i4q0pxjq035zzk9wgbfcfi1-tokio-console-0.1.10"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "tokio-console",
+      "broken": false,
+      "derivation": "/nix/store/sl5m0ngpqvs6wzgkziz5xmzih8z44nc6-tokio-console-0.1.10.drv",
+      "description": "Debugger for asynchronous Rust code",
+      "install_id": "tokio-console",
+      "license": "[ MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "tokio-console-0.1.10",
+      "pname": "tokio-console",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.1.10",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/6337wndzj91i1np9mxqzy0zsdr8yiz9j-tokio-console-0.1.10"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "tokio-console",
+      "broken": false,
+      "derivation": "/nix/store/riq3lpxdsl32rai8n6nsdqzmxpxfl9dg-tokio-console-0.1.10.drv",
+      "description": "Debugger for asynchronous Rust code",
+      "install_id": "tokio-console",
+      "license": "[ MIT ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "name": "tokio-console-0.1.10",
+      "pname": "tokio-console",
+      "rev": "4f807e8940284ad7925ebd0a0993d2a1791acb2f",
+      "rev_count": 680062,
+      "rev_date": "2024-09-11T13:54:33Z",
+      "scrape_date": "2024-09-14T03:13:36Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.1.10",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/29svm5qfdhml1gcgvg6a625fchi9ijsy-tokio-console-0.1.10"
       },
       "system": "x86_64-linux",
       "group": "toplevel",
