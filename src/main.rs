@@ -265,7 +265,10 @@ async fn handle_put_record(
     }
 
     let value_md5_hash = if state.verify_checksums {
-        format!("{:x}", md5::compute(body))
+        let body_clone = body.clone();
+        tokio::task::spawn_blocking(move || format!("{:x}", md5::compute(body_clone)))
+            .await
+            .unwrap_or_default()
     } else {
         String::new()
     };
