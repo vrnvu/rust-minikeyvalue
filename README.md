@@ -88,14 +88,14 @@ The code performs equal or better than the original Go implementation.
 
 Our implementatio results first, second the Go implementation!
 
-````
+```
 rust-minikeyvalue git:(master) ✗ go run tools/thrasher.go
 starting thrasher
 20000 write/read/delete in 7.778764375s
 thats 2571.10/sec
 ```
 
-````
+```
 minikeyvalue git:(master) ✗ go run tools/thrasher.go
 starting thrasher
 20000 write/read/delete in 7.651901291s
@@ -103,7 +103,7 @@ thats 2613.73/sec
 ```
 
 As you can see the avg latency, stdv and max are way better than the Go implementation. Around 35% improvement!
-````
+```
 rust-minikeyvalue git:(master) ✗ wrk -t2 -c100 -d10s http://localhost:3000/key
 
 Running 10s test @ http://localhost:3000/key
@@ -144,7 +144,7 @@ Some small stats, Claude3.5 generated, report if anything is wrong, lgtm.
 Also when I tested a heavy read scenario where our project exceeds:
 
 Our implementation:
-````
+```
 rust-minikeyvalue git:(master) ✗ go run tools/thrasher-read.go
 starting thrasher
 Starting GET round 1 of 1000
