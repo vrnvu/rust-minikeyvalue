@@ -178,3 +178,5 @@ GET FAILED Get "http://localhost:3003/sv04/ba/3d/L2JlbmNobWFyay0xODA1MDI5MTk1NjU
 ERROR on GET, round 745, key 164
 exit status 255
 ```
+
+So the only benefit the go implementation has is the better runtime implementation vs tokio rust which should be tunned for heavy scenarios. Even if the performance of every individual request is far superior, the runtime lags behind Go.
