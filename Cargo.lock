@@ -1401,6 +1401,7 @@ dependencies = [
  "leveldb",
  "log",
  "md5",
+ "parking_lot",
  "rand",
  "reqwest",
  "serde",
