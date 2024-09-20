@@ -60,6 +60,14 @@ async fn main() -> anyhow::Result<()> {
     let replicas = cli.replicas;
     let subvolumes = cli.subvolumes;
 
+    if volumes.len() < replicas {
+        anyhow::bail!(
+            "Need at least as many volumes: {} as replicas: {}",
+            volumes.len(),
+            replicas
+        );
+    }
+
     server::new_and_serve(
         port,
         leveldb_path,
