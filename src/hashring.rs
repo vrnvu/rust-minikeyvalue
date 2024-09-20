@@ -1,31 +1,44 @@
 use hashring::HashRing;
 
-/// `hashring`: HashRing to use for storing the data.
-/// `replicas`: The number of replicas to create for the data. Default is 3.
-/// `subvolumes`: The number of subvolumes, i.e., disks per machine. Default is 10.
-pub fn get_volume(
-    key: &str,
-    hashring: &HashRing<String>,
+pub struct Ring {
+    hashring: HashRing<String>,
     replicas: usize,
     subvolumes: u32,
-) -> Vec<String> {
-    let volumes = hashring.get_with_replicas(&key, replicas).unwrap();
+}
 
-    if volumes.len() == 1 {
-        return volumes;
+impl Ring {
+    pub fn new(volumes: Vec<String>, replicas: usize, subvolumes: u32) -> Self {
+        let mut hashring: HashRing<String> = HashRing::new();
+        hashring.batch_add(volumes);
+        Self {
+            hashring,
+            replicas,
+            subvolumes,
+        }
     }
 
-    volumes
-        .into_iter()
-        .map(|volume| {
-            let volume_md5 = md5::compute(&volume);
-            let subvolume_hash = (u32::from(volume_md5[12]) << 24)
-                + (u32::from(volume_md5[13]) << 16)
-                + (u32::from(volume_md5[14]) << 8)
-                + u32::from(volume_md5[15]);
-            format!("{}/sv{:02X}", volume, subvolume_hash % subvolumes)
-        })
-        .collect::<Vec<String>>()
+    pub fn get_volume(&self, key: &str) -> Vec<String> {
+        let volumes = self
+            .hashring
+            .get_with_replicas(&key, self.replicas)
+            .unwrap();
+
+        if volumes.len() == 1 {
+            return volumes;
+        }
+
+        volumes
+            .into_iter()
+            .map(|volume| {
+                let volume_md5 = md5::compute(&volume);
+                let subvolume_hash = (u32::from(volume_md5[12]) << 24)
+                    + (u32::from(volume_md5[13]) << 16)
+                    + (u32::from(volume_md5[14]) << 8)
+                    + u32::from(volume_md5[15]);
+                format!("{}/sv{:02X}", volume, subvolume_hash % self.subvolumes)
+            })
+            .collect::<Vec<String>>()
+    }
 }
 
 #[cfg(test)]
@@ -78,19 +91,23 @@ mod tests {
 
     #[test]
     fn test_get_volume() {
-        let mut ring: HashRing<String> = HashRing::new();
-
-        ring.batch_add(vec![
-            "foo".to_string(),
-            "bar".to_string(),
-            "baz".to_string(),
-            "wow".to_string(),
-        ]);
+        let ring = Ring::new(
+            vec![
+                "foo".to_string(),
+                "bar".to_string(),
+                "baz".to_string(),
+                "wow".to_string(),
+            ],
+            3,
+            10,
+        );
 
         let key = "1";
-        let volumes = get_volume(key, &ring, 3, 10);
+        let volumes = ring.get_volume(key);
+        assert_eq!(volumes.len(), 4);
         assert_eq!(volumes[0], "foo/sv00");
         assert_eq!(volumes[1], "wow/sv05");
         assert_eq!(volumes[2], "bar/sv02");
+        assert_eq!(volumes[3], "baz/sv06");
     }
 }
