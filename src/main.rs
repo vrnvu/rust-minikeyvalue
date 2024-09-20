@@ -5,12 +5,10 @@ use clap::Parser;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use log::{debug, error};
+use parking_lot::RwLock;
 use rand::{seq::SliceRandom, SeedableRng};
 use reqwest::StatusCode;
-use tokio::{
-    signal,
-    sync::{RwLock, RwLockWriteGuard},
-};
+use tokio::signal;
 
 mod hashring;
 mod record;
@@ -172,24 +170,6 @@ async fn shutdown_signal() {
     }
 }
 
-struct LevelDbKeyGuard<'a> {
-    guard: RwLockWriteGuard<'a, HashSet<String>>,
-    key: String,
-}
-
-impl<'a> LevelDbKeyGuard<'a> {
-    async fn lock(lock_keys: &'a RwLock<HashSet<String>>, key: String) -> Self {
-        let guard = lock_keys.write().await;
-        Self { guard, key }
-    }
-}
-
-impl<'a> Drop for LevelDbKeyGuard<'a> {
-    fn drop(&mut self) {
-        self.guard.remove(&self.key);
-    }
-}
-
 async fn handle_put_record(
     axum::extract::Path(key): axum::extract::Path<String>,
     axum::extract::State(state): axum::extract::State<Arc<AppPutState>>,
@@ -202,13 +182,12 @@ async fn handle_put_record(
         return StatusCode::LENGTH_REQUIRED;
     }
 
-    if state.lock_keys.read().await.contains(&key) {
+    if state.lock_keys.read().contains(&key) {
         debug!("put_record: key: {} already locked", key);
         return StatusCode::CONFLICT;
     }
 
-    let mut lock_keys = LevelDbKeyGuard::lock(&state.lock_keys, key.clone()).await;
-    lock_keys.guard.insert(key.clone());
+    state.lock_keys.write().insert(key.clone());
 
     let record = match state.leveldb.get_record_or_default(&key).await {
         Ok(record) => record,
@@ -217,11 +196,13 @@ async fn handle_put_record(
                 "put_record: failed to get record {} from leveldb: {}",
                 key, e
             );
+            state.lock_keys.write().remove(&key);
             return StatusCode::INTERNAL_SERVER_ERROR;
         }
     };
 
     if let record::Deleted::No = record.deleted() {
+        state.lock_keys.write().remove(&key);
         return StatusCode::CONFLICT;
     }
 
@@ -256,9 +237,11 @@ async fn handle_put_record(
                     Ok(_) => (),
                     Err(e) => {
                         error!("put_record: failed to put record {} in leveldb: {}", key, e);
+                        state.lock_keys.write().remove(&key);
                         return StatusCode::INTERNAL_SERVER_ERROR;
                     }
                 }
+                state.lock_keys.write().remove(&key);
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
         }
@@ -281,10 +264,12 @@ async fn handle_put_record(
                 "put_record: failed to put record with value_md5_hash {} in leveldb: {}",
                 key, e
             );
+            state.lock_keys.write().remove(&key);
             return StatusCode::INTERNAL_SERVER_ERROR;
         }
     }
 
+    state.lock_keys.write().remove(&key);
     StatusCode::CREATED
 }
 
@@ -430,7 +415,7 @@ async fn handle_delete_record(
 ) -> axum::response::Response {
     debug!("delete_record: key: {}", key);
 
-    if state.lock_keys.read().await.contains(&key) {
+    if state.lock_keys.read().contains(&key) {
         debug!("delete_record: key: {} already locked", key);
         return axum::http::Response::builder()
             .status(axum::http::StatusCode::CONFLICT)
@@ -438,8 +423,7 @@ async fn handle_delete_record(
             .unwrap();
     }
 
-    let mut lock_keys = LevelDbKeyGuard::lock(&state.lock_keys, key.clone()).await;
-    lock_keys.guard.insert(key.clone());
+    state.lock_keys.write().insert(key.clone());
 
     let record = match state.leveldb.get_record_or_default(&key).await {
         Ok(record) => record,
@@ -448,6 +432,7 @@ async fn handle_delete_record(
                 "delete_record: failed to get record {} from leveldb: {}",
                 key, e
             );
+            state.lock_keys.write().remove(&key);
             return axum::http::Response::builder()
                 .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
                 .body(axum::body::Body::empty())
@@ -459,6 +444,7 @@ async fn handle_delete_record(
     // This probalby will make some tests fail with link/unlink
     if record.deleted() == record::Deleted::Hard || record.deleted() == record::Deleted::Soft {
         debug!("delete_record: key: {} already deleted", key);
+        state.lock_keys.write().remove(&key);
         return axum::http::Response::builder()
             .status(axum::http::StatusCode::NOT_FOUND)
             .body(axum::body::Body::empty())
@@ -477,6 +463,7 @@ async fn handle_delete_record(
                 "delete_record: failed to put deleted record {} in leveldb: {}",
                 key, e
             );
+            state.lock_keys.write().remove(&key);
             return axum::http::Response::builder()
                 .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
                 .body(axum::body::Body::empty())
@@ -486,6 +473,7 @@ async fn handle_delete_record(
 
     // TODO unlink
 
+    state.lock_keys.write().remove(&key);
     axum::http::Response::builder()
         .status(axum::http::StatusCode::NO_CONTENT)
         .body(axum::body::Body::empty())
