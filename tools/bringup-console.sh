@@ -12,4 +12,4 @@ PORT=3005 ./volume /tmp/volume5/ &
 # add in main console_subscriber::init();
 RUSTFLAGS="--cfg tokio_unstable" cargo build --release
 
-samply record target/profiling/rust-minikeyvalue --leveldb-path /tmp/indexdb/ --volumes localhost:3001,localhost:3002,localhost:3003,localhost:3004,localhost:3005
+target/release/rust-minikeyvalue --leveldb-path /tmp/indexdb/ --volumes localhost:3001,localhost:3002,localhost:3003,localhost:3004,localhost:3005
