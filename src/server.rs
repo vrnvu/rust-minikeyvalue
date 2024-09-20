@@ -273,7 +273,6 @@ async fn handle_get_record(
 
     let record = record.unwrap();
 
-    // TODO fallbacks
     if record.deleted() != record::Deleted::No {
         debug!(
             "get_record: key: {} not found, record deleted: {:?}",
@@ -381,8 +380,6 @@ async fn handle_delete_record(
         }
     };
 
-    // TODO unlink and soft delete, for now we assume soft is always deleted
-    // This probalby will make some tests fail with link/unlink
     if record.deleted() == record::Deleted::Hard || record.deleted() == record::Deleted::Soft {
         debug!("delete_record: key: {} already deleted", key);
         state.lock_keys.write().remove(&key);
@@ -411,8 +408,6 @@ async fn handle_delete_record(
                 .unwrap();
         }
     }
-
-    // TODO unlink
 
     state.lock_keys.write().remove(&key);
     axum::http::Response::builder()

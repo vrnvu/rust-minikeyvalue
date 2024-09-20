@@ -9,7 +9,7 @@ pub(crate) enum Deleted {
     No,
     Soft,
     Hard,
-    Init, // TODO https://github.com/geohot/minikeyvalue/pull/48
+    Init,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
