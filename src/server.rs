@@ -1,14 +1,14 @@
-use std::{collections::HashSet, path::Path, sync::Arc};
-
 use axum::http::StatusCode;
 use futures::{stream::FuturesUnordered, StreamExt};
 use log::{debug, error};
 use parking_lot::RwLock;
 use rand::{seq::SliceRandom, SeedableRng};
+use std::{collections::HashSet, path::Path, sync::Arc};
 use tokio::signal;
 
 use crate::{hashring, record};
 
+/// Axum state for PUT requests.
 struct AppPutState {
     leveldb: Arc<record::LevelDb>,
     lock_keys: Arc<RwLock<HashSet<String>>>,
@@ -17,17 +17,20 @@ struct AppPutState {
     verify_checksums: bool,
 }
 
+/// Axum state for GET requests.
 struct AppGetState {
     leveldb: Arc<record::LevelDb>,
     client: reqwest::Client,
     hashring: Arc<hashring::Ring>,
 }
 
+/// Axum state for DELETE requests.
 struct AppDeleteState {
     leveldb: Arc<record::LevelDb>,
     lock_keys: Arc<RwLock<HashSet<String>>>,
 }
 
+/// Starts the server and listens for incoming requests.
 pub async fn new_and_serve(
     port: u16,
     leveldb_path: &Path,
@@ -87,6 +90,7 @@ pub async fn new_and_serve(
     Ok(())
 }
 
+/// Handles the shutdown signal.
 async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
@@ -111,6 +115,10 @@ async fn shutdown_signal() {
     }
 }
 
+/// Handles PUT requests to store a record.
+/// Returns 201 if the record is created
+/// Returns 409 if the record key is already locked for PUT/DELETE
+/// Returns 500 for internal server error
 async fn handle_put_record(
     axum::extract::Path(key): axum::extract::Path<String>,
     axum::extract::State(state): axum::extract::State<Arc<AppPutState>>,
@@ -214,6 +222,8 @@ async fn handle_put_record(
     StatusCode::CREATED
 }
 
+/// Puts a value in a remote volume using reqwest
+/// if the response status is not CREATED or NO_CONTENT, an error 500 is returned
 async fn remote_put(
     client: reqwest::Client,
     remote_url: String,
@@ -240,6 +250,11 @@ async fn remote_put(
     }
 }
 
+/// Handles GET requests to retrieve a record.
+/// Returns FOUND if the record is found in a volume
+/// Returns NOT_FOUND if the record is not found
+/// Returns GONE if the record is not found in any volume
+/// Returns INTERNAL_SERVER_ERROR for internal server error
 async fn handle_get_record(
     axum::extract::Path(key): axum::extract::Path<String>,
     axum::extract::State(state): axum::extract::State<Arc<AppGetState>>,
@@ -332,10 +347,13 @@ async fn handle_get_record(
     }
 }
 
+/// Checks if the number of replicas volumes is different from the number of record read volumes
+/// and returns true if they are different, false otherwise
 fn needs_rebalance(replicas_volumes: &[String], record_read_volumes: &[String]) -> bool {
     replicas_volumes.len() != record_read_volumes.len()
 }
 
+/// Checks if a record exists in a remote volume using reqwest
 async fn remote_head(client: &reqwest::Client, remote_url: &str) -> anyhow::Result<()> {
     let res = client.head(remote_url).send().await?;
     if res.status().is_success() {
@@ -349,6 +367,11 @@ async fn remote_head(client: &reqwest::Client, remote_url: &str) -> anyhow::Resu
     }
 }
 
+/// Handles DELETE requests to delete a record.
+/// Returns 204 if the record is deleted
+/// Returns 404 if the record is not found
+/// Returns 409 if the record key is already locked for PUT/DELETE
+/// Returns 500 for internal server error
 async fn handle_delete_record(
     axum::extract::Path(key): axum::extract::Path<String>,
     axum::extract::State(state): axum::extract::State<Arc<AppDeleteState>>,

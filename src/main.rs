@@ -1,6 +1,5 @@
-use std::path::Path;
-
 use clap::Parser;
+use std::path::Path;
 
 mod hashring;
 mod record;

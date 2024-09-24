@@ -1,5 +1,9 @@
 use hashring::HashRing;
 
+/// Struct representing a hash ring for a set of volumes, replicas and subvolumes.
+/// The hash ring is used to determine which volumes contain a given record.
+/// The subvolumes are the subdirectories in each volume that contain the actual data.
+/// The replicas are the number of times the record is replicated in the hash ring.
 pub struct Ring {
     hashring: HashRing<String>,
     replicas: usize,
@@ -7,6 +11,10 @@ pub struct Ring {
 }
 
 impl Ring {
+    /// Creates a new hash ring for a set of volumes, replicas and subvolumes.
+    /// The hash ring is used to determine which volumes contain a given record.
+    /// The subvolumes are the subdirectories in each volume that contain the actual data.
+    /// The replicas are the number of times the record is replicated in the hash ring.
     pub fn new(volumes: Vec<String>, replicas: usize, subvolumes: u32) -> Self {
         let mut hashring: HashRing<String> = HashRing::new();
         hashring.batch_add(volumes);
@@ -17,6 +25,9 @@ impl Ring {
         }
     }
 
+    /// Returns the subvolumes that contain a given record.
+    /// The replicas are the number of times the record is replicated in the hash ring.
+    /// The subvolumes are the subdirectories in each volume that contain the actual data.
     pub fn get_volume(&self, key: &str) -> Vec<String> {
         let volumes = self
             .hashring
